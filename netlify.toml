@@ -1,0 +1,32 @@
+# Netlify Configuration for ConvoGuard Monorepo
+
+[build]
+  base = ""
+  publish = "apps/dashboard-frontend/dist"
+  command = "turbo run build --filter=@convoguard/dashboard-frontend"
+
+# 1. Route API Gateway traffic to production gateway URL
+# Replace "https://api.yourdomain.com" with your live API Gateway domain after deploying the backend.
+[[redirects]]
+  from = "/api/v1/*"
+  to = "https://api.yourdomain.com/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/graphql"
+  to = "https://api.yourdomain.com/graphql"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ingest/*"
+  to = "https://api.yourdomain.com/ingest/:splat"
+  status = 200
+  force = true
+
+# 2. Redirect all other traffic to index.html (Required for React Router client-side routing)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
