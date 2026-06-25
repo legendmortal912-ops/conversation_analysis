@@ -1,0 +1,313 @@
+# ═══════════════════════════════════════════════════════════
+# ConvoGuard — Full Stack Docker Compose (Dev)
+# Usage: docker compose up -d
+# ═══════════════════════════════════════════════════════════
+
+services:
+  # ═══ INFRASTRUCTURE ═════════════════════════════════════
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: convoguard-postgres
+    environment:
+      POSTGRES_USER: convoguard
+      POSTGRES_PASSWORD: convoguard_dev
+      POSTGRES_DB: convoguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U convoguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoguard
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: convoguard-timescaledb
+    environment:
+      POSTGRES_USER: convoguard
+      POSTGRES_PASSWORD: convoguard_dev
+      POSTGRES_DB: convoguard_metrics
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescaledata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U convoguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoguard
+
+  redis:
+    image: redis:7-alpine
+    container_name: convoguard-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoguard
+
+  immudb:
+    image: codenotary/immudb:latest
+    container_name: convoguard-immudb
+    ports:
+      - "3322:3322"
+      - "8080:8080"
+    volumes:
+      - immudbdata:/var/lib/immudb
+    environment:
+      IMMUDB_ADDRESS: 0.0.0.0
+    healthcheck:
+      test: ["CMD", "immuadmin", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoguard
+
+  immugw:
+    image: codenotary/immugw:latest
+    container_name: convoguard-immugw
+    ports:
+      - "3323:3323"
+    environment:
+      IMMUGW_ADDRESS: 0.0.0.0
+      IMMUGW_PORT: 3323
+      IMMUGW_IMMUDB_ADDRESS: immudb
+      IMMUGW_IMMUDB_PORT: 3322
+    depends_on:
+      immudb:
+        condition: service_healthy
+    networks:
+      - convoguard
+
+  minio:
+    image: minio/minio:latest
+    container_name: convoguard-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    environment:
+      MINIO_ROOT_USER: convoguard
+      MINIO_ROOT_PASSWORD: convoguard_dev_secret
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoguard
+
+  # ═══ APPLICATION SERVICES ══════════════════════════════
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    container_name: convoguard-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-service:3002
+      INGEST_SERVICE_URL: http://ingest-service:3001
+      BILLING_SERVICE_URL: http://billing-service:3003
+      ALERT_SERVICE_URL: http://alert-service:3004
+      DASHBOARD_BACKEND_URL: http://dashboard-backend:3005
+      IMMUGW_URL: http://immugw:3323
+      FRONTEND_URL: http://localhost:5173
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - convoguard
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: apps/auth-service/Dockerfile
+    container_name: convoguard-auth-service
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      DATABASE_URL: postgresql://convoguard:convoguard_dev@postgres:5432/convoguard
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-jwt-secret-change-in-production-64-chars-minimum-required
+      JWT_REFRESH_SECRET: dev-jwt-refresh-secret-change-in-production-64-chars-min
+      SMTP_HOST: ${SMTP_HOST:-smtp.mailtrap.io}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: noreply@convoguard.dev
+      FRONTEND_URL: http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - convoguard
+
+  ingest-service:
+    build:
+      context: .
+      dockerfile: apps/ingest-service/Dockerfile
+    container_name: convoguard-ingest-service
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://convoguard:convoguard_dev@postgres:5432/convoguard
+      REDIS_URL: redis://redis:6379
+      IMMUGW_URL: http://immugw:3323
+      ANALYSIS_ENGINE_URL: http://analysis-engine:8001
+      AUTH_SERVICE_URL: http://auth-service:3002
+      BILLING_SERVICE_URL: http://billing-service:3003
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      immugw:
+        condition: service_started
+    networks:
+      - convoguard
+
+  analysis-engine:
+    build:
+      context: apps/analysis-engine
+      dockerfile: Dockerfile
+    container_name: convoguard-analysis-engine
+    ports:
+      - "8001:8001"
+    environment:
+      PORT: 8001
+      MODEL_PATH: /app/models
+      LOG_LEVEL: debug
+    volumes:
+      - ./models:/app/models
+    networks:
+      - convoguard
+
+  alert-service:
+    build:
+      context: .
+      dockerfile: apps/alert-service/Dockerfile
+    container_name: convoguard-alert-service
+    ports:
+      - "3004:3004"
+    environment:
+      NODE_ENV: development
+      PORT: 3004
+      DATABASE_URL: postgresql://convoguard:convoguard_dev@postgres:5432/convoguard
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: ${SMTP_HOST:-smtp.mailtrap.io}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: noreply@convoguard.dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - convoguard
+
+  billing-service:
+    build:
+      context: .
+      dockerfile: apps/billing-service/Dockerfile
+    container_name: convoguard-billing-service
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: development
+      PORT: 3003
+      DATABASE_URL: postgresql://convoguard:convoguard_dev@postgres:5432/convoguard
+      REDIS_URL: redis://redis:6379
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_mock}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_mock}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - convoguard
+
+  dashboard-backend:
+    build:
+      context: .
+      dockerfile: apps/dashboard-backend/Dockerfile
+    container_name: convoguard-dashboard-backend
+    ports:
+      - "3005:3005"
+    environment:
+      NODE_ENV: development
+      PORT: 3005
+      DATABASE_URL: postgresql://convoguard:convoguard_dev@postgres:5432/convoguard
+      REDIS_URL: redis://redis:6379
+      IMMUGW_URL: http://immugw:3323
+      TIMESCALE_URL: postgresql://convoguard:convoguard_dev@timescaledb:5432/convoguard_metrics
+      AUTH_SERVICE_URL: http://auth-service:3002
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: convoguard
+      MINIO_SECRET_KEY: convoguard_dev_secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - convoguard
+
+  dashboard-frontend:
+    build:
+      context: .
+      dockerfile: apps/dashboard-frontend/Dockerfile
+    container_name: convoguard-dashboard-frontend
+    ports:
+      - "5173:80"
+    environment:
+      VITE_API_URL: http://localhost:3000
+      VITE_WS_URL: ws://localhost:3000
+      VITE_GRAPHQL_URL: http://localhost:3005/graphql
+      VITE_GRAPHQL_WS_URL: ws://localhost:3005/graphql
+    networks:
+      - convoguard
+
+volumes:
+  pgdata:
+  timescaledata:
+  redisdata:
+  immudbdata:
+  miniodata:
+
+networks:
+  convoguard:
+    driver: bridge

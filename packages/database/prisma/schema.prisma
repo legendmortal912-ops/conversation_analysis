@@ -1,0 +1,456 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// ConvoGuard — Full PostgreSQL Schema
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Enums
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum UserRole {
+  OWNER
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
+enum PlanId {
+  FREE
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum ConversationStatus {
+  ACTIVE
+  COMPLETED
+  FLAGGED
+  ARCHIVED
+}
+
+enum TurnRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum FlagSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ReviewVerdict {
+  CONFIRMED
+  DISMISSED
+  ESCALATED
+}
+
+enum AlertChannel {
+  WEBHOOK
+  SLACK
+  EMAIL
+}
+
+enum AlertStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  RETRYING
+  SKIPPED_DEDUP
+  SKIPPED_RATELIMIT
+}
+
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum UsageEventType {
+  CONVERSATION_CREATED
+  TURN_PROCESSED
+  FLAG_DETECTED
+  TOKENS_PROCESSED
+  API_CALL
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Organization & Team
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Top-level tenant in ConvoGuard. All resources belong to an organization.
+model Organization {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  stripeCustomerId  String?  @unique @map("stripe_customer_id")
+  stripeSubscriptionId String? @unique @map("stripe_subscription_id")
+  plan              PlanId   @default(FREE)
+  settings          Json     @default("{}")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  users        User[]
+  projects     Project[]
+  apiKeys      ApiKey[]
+  usageEvents  UsageEvent[]
+  invites      Invite[]
+  reports      Report[]
+
+  @@map("organizations")
+}
+
+/// A user within an organization.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  emailVerified Boolean  @default(false) @map("email_verified")
+  verificationToken String? @unique @map("verification_token")
+  passwordHash String?  @map("password_hash")
+  googleId     String?  @unique @map("google_id")
+  githubId     String?  @unique @map("github_id")
+  avatarUrl    String?  @map("avatar_url")
+  name         String
+  role         UserRole @default(VIEWER)
+  orgId        String   @map("org_id")
+  resetToken   String?  @unique @map("reset_token")
+  resetTokenExpires DateTime? @map("reset_token_expires")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  apiKeys      ApiKey[]     @relation("CreatedByUser")
+  sessions     Session[]
+  flagReviews  FlagReview[]
+
+  @@index([orgId])
+  @@index([email])
+  @@map("users")
+}
+
+/// A project groups conversations under a specific AI system being monitored.
+model Project {
+  id              String   @id @default(cuid())
+  name            String
+  aiSystemName    String   @map("ai_system_name")
+  orgId           String   @map("org_id")
+  alertThreshold  Int      @default(40) @map("alert_threshold")
+  settings        Json     @default("{}")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  apiKeys       ApiKey[]
+  conversations Conversation[]
+  alertConfigs  AlertConfig[]
+  customRules   CustomRule[]
+  usageEvents   UsageEvent[]
+  reports       Report[]
+
+  @@index([orgId])
+  @@map("projects")
+}
+
+/// A custom rule allows organizations to define their own pattern matching using regex.
+model CustomRule {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  name        String
+  description String?
+  patterns    String[]
+  severity    FlagSeverity @default(HIGH)
+  isEnabled   Boolean  @default(true) @map("is_enabled")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("custom_rules")
+}
+
+/// API key used for programmatic SDK access.
+model ApiKey {
+  id          String    @id @default(cuid())
+  keyHash     String    @unique @map("key_hash")
+  keyPrefix   String    @map("key_prefix")
+  name        String
+  orgId       String    @map("org_id")
+  projectId   String?   @map("project_id")
+  createdById String    @map("created_by_id")
+  lastUsedAt  DateTime? @map("last_used_at")
+  expiresAt   DateTime? @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy    User         @relation("CreatedByUser", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([keyPrefix])
+  @@map("api_keys")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Conversations & Analysis
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// A conversation represents a complete dialogue session being monitored.
+model Conversation {
+  id         String             @id @default(cuid())
+  projectId  String             @map("project_id")
+  orgId      String             @map("org_id")
+  externalId String?            @map("external_id")
+  status     ConversationStatus @default(ACTIVE)
+  tiltScore  Float?             @map("tilt_score")
+  grade      String?
+  turnCount  Int                @default(0) @map("turn_count")
+  flagCount  Int                @default(0) @map("flag_count")
+  metadata   Json               @default("{}")
+  startedAt  DateTime           @default(now()) @map("started_at")
+  endedAt    DateTime?          @map("ended_at")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  turns   Turn[]
+  flags   Flag[]
+  alerts  Alert[]
+
+  @@index([projectId])
+  @@index([orgId])
+  @@index([status])
+  @@index([tiltScore])
+  @@index([externalId])
+  @@map("conversations")
+}
+
+/// A single turn (message) within a conversation.
+model Turn {
+  id             String   @id @default(cuid())
+  conversationId String   @map("conversation_id")
+  index          Int
+  role           TurnRole
+  content        String
+  tokenCount     Int      @default(0) @map("token_count")
+  contentHash    String   @map("content_hash")
+  previousHash   String   @map("previous_hash")
+  latencyMs      Int?     @map("latency_ms")
+  model          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  flags        Flag[]
+
+  @@unique([conversationId, index])
+  @@index([conversationId])
+  @@map("turns")
+}
+
+/// A manipulation flag raised by the detection engine on a specific turn.
+model Flag {
+  id             String       @id @default(cuid())
+  turnId         String       @map("turn_id")
+  conversationId String       @map("conversation_id")
+  projectId      String       @map("project_id")
+  patternName    String       @map("pattern_name")
+  description    String
+  severity       FlagSeverity
+  confidence     Float
+  evidence       String
+  scoreImpact    Float        @map("score_impact")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  // Relations
+  turn         Turn         @relation(fields: [turnId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  reviews      FlagReview[]
+
+  @@index([conversationId])
+  @@index([projectId])
+  @@index([patternName])
+  @@index([severity])
+  @@map("flags")
+}
+
+/// A human review verdict on a flag.
+model FlagReview {
+  id         String        @id @default(cuid())
+  flagId     String        @map("flag_id")
+  reviewerId String        @map("reviewer_id")
+  verdict    ReviewVerdict
+  notes      String?
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  // Relations
+  flag     Flag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+  reviewer User @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([flagId])
+  @@map("flag_reviews")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Alerts
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Per-project configuration for alert delivery.
+model AlertConfig {
+  id              String       @id @default(cuid())
+  projectId       String       @map("project_id")
+  channel         AlertChannel
+  webhookUrl      String?      @map("webhook_url")
+  slackWebhookUrl String?      @map("slack_webhook_url")
+  emailAddresses  String[]     @map("email_addresses")
+  enabled         Boolean      @default(true)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  alerts  Alert[]
+
+  @@index([projectId])
+  @@map("alert_configs")
+}
+
+/// An alert instance created for each config × trigger combination.
+model Alert {
+  id             String      @id @default(cuid())
+  alertConfigId  String      @map("alert_config_id")
+  conversationId String      @map("conversation_id")
+  flagId         String?     @map("flag_id")
+  channel        AlertChannel
+  status         AlertStatus @default(PENDING)
+  tiltScore      Float       @map("tilt_score")
+  message        String
+  attemptCount   Int         @default(0) @map("attempt_count")
+  lastAttemptAt  DateTime?   @map("last_attempt_at")
+  sentAt         DateTime?   @map("sent_at")
+  lastError      String?     @map("last_error")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  alertConfig  AlertConfig  @relation(fields: [alertConfigId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([alertConfigId])
+  @@index([conversationId])
+  @@index([status])
+  @@map("alerts")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Reports
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// A generated report (PDF, CSV, etc.) for a project.
+model Report {
+  id         String       @id @default(cuid())
+  title      String
+  reportType String       @map("report_type")
+  projectId  String       @map("project_id")
+  orgId      String       @map("org_id")
+  status     ReportStatus @default(PENDING)
+  fileUrl    String?      @map("file_url")
+  config     Json         @default("{}")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([orgId])
+  @@map("reports")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Auth & Sessions
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Server-side session for refresh-token binding.
+model Session {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  refreshTokenHash String   @map("refresh_token_hash")
+  expiresAt        DateTime @map("expires_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Billing & Usage
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// A metered usage event for billing.
+model UsageEvent {
+  id          String         @id @default(cuid())
+  orgId       String         @map("org_id")
+  projectId   String?        @map("project_id")
+  eventType   UsageEventType @map("event_type")
+  quantity    Int
+  periodStart DateTime       @map("period_start")
+  periodEnd   DateTime       @map("period_end")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+  @@index([eventType])
+  @@index([periodStart, periodEnd])
+  @@map("usage_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Invites
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// An invitation for a user to join an organization.
+model Invite {
+  id         String    @id @default(cuid())
+  email      String
+  orgId      String    @map("org_id")
+  role       UserRole
+  token      String    @unique
+  expiresAt  DateTime  @map("expires_at")
+  acceptedAt DateTime? @map("accepted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([email])
+  @@index([token])
+  @@map("invites")
+}

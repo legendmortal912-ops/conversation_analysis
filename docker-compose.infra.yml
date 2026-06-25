@@ -1,0 +1,132 @@
+# ═══════════════════════════════════════════════════════════
+# ConvoGuard — Infrastructure Only (databases, cache, storage)
+# Usage: docker compose -f docker-compose.infra.yml up -d
+# ═══════════════════════════════════════════════════════════
+
+services:
+  # ─── PostgreSQL (mutable data) ──────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: convoguard-postgres
+    environment:
+      POSTGRES_USER: convoguard
+      POSTGRES_PASSWORD: convoguard_dev
+      POSTGRES_DB: convoguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U convoguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoguard
+
+  # ─── TimescaleDB (metrics time-series) ──────────────────
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: convoguard-timescaledb
+    environment:
+      POSTGRES_USER: convoguard
+      POSTGRES_PASSWORD: convoguard_dev
+      POSTGRES_DB: convoguard_metrics
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescaledata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U convoguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoguard
+
+  # ─── Redis 7 (cache, queues, pub/sub) ──────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: convoguard-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoguard
+
+  # ─── immudb (immutable ledger) ──────────────────────────
+  immudb:
+    image: codenotary/immudb:latest
+    container_name: convoguard-immudb
+    ports:
+      - "3322:3322"   # gRPC
+      - "8080:8080"   # metrics
+      - "9497:9497"   # Prometheus
+    volumes:
+      - immudbdata:/var/lib/immudb
+    environment:
+      IMMUDB_ADDRESS: 0.0.0.0
+      IMMUDB_PORT: 3322
+    healthcheck:
+      test: ["CMD", "immuadmin", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoguard
+
+  # ─── immugw (immudb REST gateway) ──────────────────────
+  immugw:
+    image: codenotary/immugw:latest
+    container_name: convoguard-immugw
+    ports:
+      - "3323:3323"
+    environment:
+      IMMUGW_ADDRESS: 0.0.0.0
+      IMMUGW_PORT: 3323
+      IMMUGW_IMMUDB_ADDRESS: immudb
+      IMMUGW_IMMUDB_PORT: 3322
+    depends_on:
+      immudb:
+        condition: service_healthy
+    networks:
+      - convoguard
+
+  # ─── MinIO (S3-compatible object storage) ──────────────
+  minio:
+    image: minio/minio:latest
+    container_name: convoguard-minio
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - miniodata:/data
+    environment:
+      MINIO_ROOT_USER: convoguard
+      MINIO_ROOT_PASSWORD: convoguard_dev_secret
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - convoguard
+
+volumes:
+  pgdata:
+  timescaledata:
+  redisdata:
+  immudbdata:
+  miniodata:
+
+networks:
+  convoguard:
+    driver: bridge

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: convoguard
+  labels:
+    app.kubernetes.io/name: convoguard
+    app.kubernetes.io/part-of: convoguard

@@ -1,0 +1,83 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Docker
+.docker/
+
+# MinIO data
+minio-data/
+
+# PostgreSQL data
+pgdata/
+
+# Redis data
+redis-data/
+
+# immudb data
+immudb-data/
+
+# Model weights (large files)
+**/models/
+*.safetensors
+*.bin
+*.pt
+*.onnx
+
+# Training datasets
+*.jsonl
+training_data/
+
+# Video frames
+Frame_videos/
+
+# Logs
+logs/
+*.log
+
+# Reports
+reports/*.pdf
+reports/*.csv
+
+# Turbo
+.turbo/
+graphify-out/
+.agents/
+.gemini/

@@ -1,0 +1,29 @@
+{
+  "name": "convoguard-js",
+  "version": "1.0.0",
+  "description": "ConvoGuard JavaScript/TypeScript SDK — Real-time AI manipulation detection",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist/", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["convoguard", "ai", "manipulation", "detection", "analytics", "nlp", "ethics"],
+  "author": "ConvoGuard",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

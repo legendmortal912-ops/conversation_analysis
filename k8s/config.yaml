@@ -1,0 +1,58 @@
+# ═══════════════════════════════════════════════════════════
+# ConvoGuard — ConfigMap (non-secret configuration)
+# ═══════════════════════════════════════════════════════════
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: convoguard-config
+  namespace: convoguard
+data:
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  # Service URLs (internal DNS within cluster)
+  AUTH_SERVICE_URL: "http://auth-service.convoguard.svc.cluster.local:3002"
+  INGEST_SERVICE_URL: "http://ingest-service.convoguard.svc.cluster.local:3001"
+  BILLING_SERVICE_URL: "http://billing-service.convoguard.svc.cluster.local:3003"
+  ALERT_SERVICE_URL: "http://alert-service.convoguard.svc.cluster.local:3004"
+  DASHBOARD_BACKEND_URL: "http://dashboard-backend.convoguard.svc.cluster.local:3005"
+  ANALYSIS_ENGINE_URL: "http://analysis-engine.convoguard.svc.cluster.local:8001"
+  IMMUGW_URL: "http://immugw.convoguard.svc.cluster.local:3323"
+  REDIS_URL: "redis://redis.convoguard.svc.cluster.local:6379"
+  MINIO_ENDPOINT: "minio.convoguard.svc.cluster.local"
+  MINIO_PORT: "9000"
+  MINIO_USE_SSL: "false"
+  MINIO_BUCKET: "convoguard-reports"
+  FRONTEND_URL: "https://app.convoguard.dev"
+---
+# ═══════════════════════════════════════════════════════════
+# Secrets — Use Sealed Secrets or Vault in production
+# ═══════════════════════════════════════════════════════════
+apiVersion: v1
+kind: Secret
+metadata:
+  name: convoguard-secrets
+  namespace: convoguard
+  annotations:
+    # In production, use Sealed Secrets:
+    # sealedsecrets.bitnami.com/managed: "true"
+    # Or HashiCorp Vault:
+    # vault.hashicorp.com/agent-inject: "true"
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://convoguard:CHANGE_ME@postgres.convoguard.svc.cluster.local:5432/convoguard"
+  TIMESCALE_URL: "postgresql://convoguard:CHANGE_ME@timescaledb.convoguard.svc.cluster.local:5432/convoguard_metrics"
+  JWT_SECRET: "CHANGE_ME_TO_64_CHAR_RANDOM_STRING"
+  JWT_REFRESH_SECRET: "CHANGE_ME_TO_ANOTHER_64_CHAR_RANDOM_STRING"
+  STRIPE_SECRET_KEY: "sk_live_CHANGE_ME"
+  STRIPE_WEBHOOK_SECRET: "whsec_CHANGE_ME"
+  SIGNING_PRIVATE_KEY: "CHANGE_ME"
+  SIGNING_PUBLIC_KEY: "CHANGE_ME"
+  MINIO_ACCESS_KEY: "CHANGE_ME"
+  MINIO_SECRET_KEY: "CHANGE_ME"
+  SMTP_HOST: "CHANGE_ME"
+  SMTP_PORT: "587"
+  SMTP_USER: "CHANGE_ME"
+  SMTP_PASS: "CHANGE_ME"
+  SMTP_FROM: "noreply@convoguard.dev"
+  IMMUDB_USER: "immudb"
+  IMMUDB_PASSWORD: "CHANGE_ME"
