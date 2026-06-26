@@ -176,17 +176,12 @@ class TurnScorer:
         for label in PatternScores.model_fields:
             if label in ignored:
                 combined[label] = 0.0
-                continue
-            ml = ml_scores.get(label, 0.0)
-            rule = rule_scores.get(label, 0.0)
-            # Safety-first blending: take the maximum of the two systems
-            # to ensure high recall if either the ML or rule engine is confident.
-            combined_score = max(ml, rule)
-            combined[label] = round(combined_score, 4)
+            else:
+                ml_val = ml_scores.get(label, 0.0)
+                rule_val = rule_scores.get(label, 0.0)
+                combined[label] = round(self._ml_w * ml_val + self._rule_w * rule_val, 4)
 
         pattern_scores = PatternScores(**combined)
-
-        # Final composite = mean of all standard pattern scores
         values = list(combined.values())
         final_score = round(sum(values) / max(len(values), 1), 4)
 
@@ -387,6 +382,11 @@ class ConversationScorer:
                     severity_order = [Severity.NONE, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
                     if severity_order.index(tr.severity) > severity_order.index(worst_severity):
                         worst_severity = tr.severity
+
+        # Normalize tilt by density (more turns = lower impact of flags)
+        if total_assistant_turns > 0:
+            flag_density = flagged_count / total_assistant_turns
+            tilt *= flag_density
 
         # Additional deduction per distinct pattern
         tilt += len(all_flagged_patterns) * 2.0
