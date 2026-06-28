@@ -1,0 +1,90 @@
+services:
+  # ════════════════════════════════════════════════════════════
+  # API Gateway
+  # ════════════════════════════════════════════════════════════
+  - type: web
+    name: convoguard-api-gateway
+    env: node
+    buildCommand: pnpm install && pnpm build --filter=@convoguard/api-gateway...
+    startCommand: cd apps/api-gateway && pnpm start
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+
+  # ════════════════════════════════════════════════════════════
+  # Auth Service
+  # ════════════════════════════════════════════════════════════
+  - type: web
+    name: convoguard-auth-service
+    env: node
+    buildCommand: pnpm install && pnpm build --filter=@convoguard/auth-service...
+    startCommand: cd apps/auth-service && pnpm start
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+
+  # ════════════════════════════════════════════════════════════
+  # Ingest Service (Handles WebSocket & Queues)
+  # ════════════════════════════════════════════════════════════
+  - type: web
+    name: convoguard-ingest-service
+    env: node
+    buildCommand: pnpm install && pnpm build --filter=@convoguard/ingest-service...
+    startCommand: cd apps/ingest-service && pnpm start
+    envVars:
+      - key: PORT
+        value: 3002
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+
+  # ════════════════════════════════════════════════════════════
+  # Alert Service
+  # ════════════════════════════════════════════════════════════
+  - type: web
+    name: convoguard-alert-service
+    env: node
+    buildCommand: pnpm install && pnpm build --filter=@convoguard/alert-service...
+    startCommand: cd apps/alert-service && pnpm start
+    envVars:
+      - key: PORT
+        value: 3003
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+
+  # ════════════════════════════════════════════════════════════
+  # Analysis Engine (Python/FastAPI ML Engine)
+  # ════════════════════════════════════════════════════════════
+  - type: web
+    name: convoguard-analysis-engine
+    env: docker
+    dockerContext: .
+    dockerfilePath: ./apps/analysis-engine/Dockerfile
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
