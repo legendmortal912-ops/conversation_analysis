@@ -15,6 +15,7 @@ export default function Login() {
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
   const addToast = useUIStore((s) => s.addToast);
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +102,7 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-3 mb-6">
               <a 
-                href="http://localhost:3002/auth/google/login" 
+                href={`${API_URL}/auth/google/login`} 
                 className="flex items-center justify-center gap-3 w-full py-2.5 px-4 bg-white dark:bg-navy-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-navy-700 transition-colors"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -114,7 +115,7 @@ export default function Login() {
                 Continue with Google
               </a>
               <a 
-                href="http://localhost:3002/auth/github/login" 
+                href={`${API_URL}/auth/github/login`} 
                 className="flex items-center justify-center gap-3 w-full py-2.5 px-4 bg-slate-900 dark:bg-navy-800 border border-slate-900 dark:border-slate-700 rounded-lg text-sm font-medium text-white hover:bg-slate-800 dark:hover:bg-navy-700 transition-colors"
               >
                 <Github className="w-5 h-5" />

@@ -8,6 +8,7 @@ import {
   Mail, Webhook, Save, UserPlus, AlertTriangle,
   ToggleLeft, ToggleRight, Loader2, X, MessageSquare, RefreshCw, Flag
 } from 'lucide-react';
+import { Billing } from './settings/Billing';
 
 // ─── GraphQL ────────────────────────────────────────────────────────────────
 const GET_ORG = gql`
@@ -705,90 +706,7 @@ function CustomRulesTab({ projects }: { projects: any[] }) {
   );
 }
 
-// ─── Tab: Billing ─────────────────────────────────────────────────────────────
-function BillingTab() {
-  const { data, loading } = useQuery(GET_USAGE, { fetchPolicy: 'cache-and-network' });
-  const [showUpgrade, setShowUpgrade] = useState(false);
-  if (loading && !data) return <Spinner />;
 
-  const stats = data?.usageStats;
-  const planLimits: Record<string, { conversations: number; label: string; color: string }> = {
-    FREE: { conversations: 1000, label: 'Free', color: 'bg-slate-500' },
-    STARTER: { conversations: 10000, label: 'Starter', color: 'bg-accent-500' },
-    GROWTH: { conversations: 100000, label: 'Growth', color: 'bg-purple-500' },
-    ENTERPRISE: { conversations: Infinity, label: 'Enterprise', color: 'bg-amber-500' },
-  };
-  const plan = planLimits[stats?.plan ?? 'FREE'];
-  const convPct = plan.conversations === Infinity ? 5 : Math.min(100, ((stats?.totalConversations ?? 0) / plan.conversations) * 100);
-
-  return (
-    <div className="space-y-6">
-      <SectionHeader title="Billing & Usage" description="Your real usage tracked from the database." />
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: 'Conversations Analyzed', value: stats?.totalConversations ?? 0, Icon: MessageSquare, color: 'text-purple-400' },
-          { label: 'Turns Processed', value: stats?.totalTurns ?? 0, Icon: RefreshCw, color: 'text-blue-400' },
-          { label: 'Flags Detected', value: stats?.totalFlags ?? 0, Icon: Flag, color: 'text-rose-400' },
-        ].map((s) => (
-          <div key={s.label} className="convo-card p-5 flex flex-col items-start">
-            <s.Icon className={`h-6 w-6 mb-3 ${s.color}`} />
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{s.value.toLocaleString()}</p>
-            <p className="text-sm text-slate-500 mt-1">{s.label}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="convo-card p-6 mt-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Current Plan</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Usage tracked from DB</p>
-          </div>
-          <span className={`px-3 py-1 rounded-lg text-white text-sm font-semibold ${plan.color}`}>{plan.label}</span>
-        </div>
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-600 dark:text-slate-400">Conversations</span>
-            <span className="font-medium text-slate-900 dark:text-white">
-              {(stats?.totalConversations ?? 0).toLocaleString()} / {plan.conversations === Infinity ? 'Unlimited' : plan.conversations.toLocaleString()}
-            </span>
-          </div>
-          <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${plan.color}`} style={{ width: `${convPct}%` }} />
-          </div>
-        </div>
-      </div>
-
-      <div className="convo-card p-5 mt-6">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Need more capacity?</h3>
-        <p className="text-sm text-slate-500 mb-4">Upgrade to increase limits, unlock team features, and get priority support.</p>
-        <button
-          onClick={() => setShowUpgrade(true)}
-          className="px-5 py-2.5 bg-gradient-to-r from-accent-600 to-purple-600 hover:from-accent-700 hover:to-purple-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-accent-500/20 transition-all"
-        >
-          Upgrade Plan
-        </button>
-      </div>
-
-      {/* Upgrade modal */}
-      {showUpgrade && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16 overflow-y-auto">
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm -z-10" onClick={() => setShowUpgrade(false)} />
-          <div className="relative w-full max-w-4xl z-10">
-            <button
-              onClick={() => setShowUpgrade(false)}
-              className="absolute -top-10 right-0 flex items-center gap-1.5 text-white/70 hover:text-white text-sm transition-colors"
-            >
-              <X className="h-4 w-4" /> Close
-            </button>
-            <BillingCalculator />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 export default function Settings() {
@@ -843,7 +761,7 @@ export default function Settings() {
           {tab === 'api-keys' && <ApiKeysTab />}
           {tab === 'custom-rules' && <CustomRulesTab projects={orgData?.projects ?? []} />}
           {tab === 'alerts' && <AlertRulesTab projects={orgData?.projects ?? []} />}
-          {tab === 'billing' && <BillingTab />}
+          {tab === 'billing' && <Billing />}
           {!validTabs.includes(tab) && <GeneralTab />}
         </div>
       </div>
