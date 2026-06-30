@@ -23,6 +23,7 @@ RUN uv sync --no-dev --no-install-project
 
 # ---- Application layer ----
 FROM deps AS app
+COPY README.md ./
 COPY src/ ./src/
 
 # Pre-download sentence-transformer model so startup is fast
