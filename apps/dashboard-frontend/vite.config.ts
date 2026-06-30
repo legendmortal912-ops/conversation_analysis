@@ -10,17 +10,17 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api/v1': {
-        target: 'http://127.0.0.1:3000',
+        target: process.env.VITE_API_URL || 'http://54.82.212.132:3000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/v1/, '')
       },
       '/graphql': {
-        target: 'http://127.0.0.1:3000',
+        target: process.env.VITE_API_URL || 'http://54.82.212.132:3000',
         changeOrigin: true,
         ws: true,
       },
       '/ingest': {
-        target: 'http://127.0.0.1:3000',
+        target: process.env.VITE_API_URL || 'http://54.82.212.132:3000',
         changeOrigin: true,
       }
     }
