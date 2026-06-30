@@ -4,11 +4,11 @@
  * representing the core domain model for AI manipulation detection.
  */
 
+import type { FlagSeverity } from './organization.js';
+export type { FlagSeverity };
+
 /** Who sent a particular turn in a conversation. */
 export type TurnRole = 'USER' | 'ASSISTANT' | 'SYSTEM';
-
-/** Severity levels for detected manipulation flags. */
-export type FlagSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 /** Status of a human review on a flag. */
 export type ReviewVerdict = 'CONFIRMED' | 'DISMISSED' | 'ESCALATED';

@@ -94,7 +94,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
               data: {
                 stripeCustomerId: session.customer as string,
                 stripeSubscriptionId: session.subscription as string,
-                plan: planId,
+                plan: planId as any,
               },
             });
             logger.info(
@@ -121,7 +121,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
               const planId = resolvePlanFromSubscription(sub);
               await prisma.organization.update({
                 where: { id: orgId },
-                data: { plan: planId },
+                data: { plan: planId as any },
               });
               logger.info({ orgId, planId, status: sub.status }, 'Subscription updated — plan synced');
             } else {

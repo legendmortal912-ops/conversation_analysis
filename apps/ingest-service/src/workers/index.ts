@@ -231,7 +231,7 @@ async function processScoringJob(job: Job<ScoringJob>): Promise<void> {
       {
         conversationId: conversation_id,
         tiltScore: result.tilt_score,
-        grade: result.grade,
+        grade: result.tilt_grade,
       },
       'Conversation scored',
     );
