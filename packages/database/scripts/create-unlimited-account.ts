@@ -9,8 +9,10 @@ async function main() {
   const hash = await bcrypt.hash(password, 12);
 
   // Create Organization
-  const org = await prisma.organization.create({
-    data: {
+  const org = await prisma.organization.upsert({
+    where: { slug: 'unlimited-corp' },
+    update: { plan: PlanId.ENTERPRISE },
+    create: {
       name: 'Unlimited Corp',
       slug: 'unlimited-corp',
       plan: PlanId.ENTERPRISE,
@@ -18,13 +20,21 @@ async function main() {
   });
 
   // Create User
-  const user = await prisma.user.create({
-    data: {
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: {
+      passwordHash: hash,
+      role: UserRole.OWNER,
+      orgId: org.id,
+      emailVerified: true,
+    },
+    create: {
       email,
       name: 'Unlimited Admin',
       passwordHash: hash,
       role: UserRole.OWNER,
       orgId: org.id,
+      emailVerified: true,
     },
   });
 

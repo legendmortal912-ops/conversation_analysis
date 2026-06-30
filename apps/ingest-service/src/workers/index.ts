@@ -5,11 +5,11 @@ import { prisma } from '@convoguard/database';
 
 const ANALYSIS_ENGINE_URL = process.env['ANALYSIS_ENGINE_URL'] ?? 'http://localhost:8001';
 
-const redisConnection = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
+const redisConnection = new IORedis(process.env['REDIS_URL'] ?? 'redis://127.0.0.1:6379', {
   maxRetriesPerRequest: null,
 });
 
-const redisPub = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
+const redisPub = new IORedis(process.env['REDIS_URL'] ?? 'redis://127.0.0.1:6379');
 
 /** Analysis job data */
 interface AnalysisJob {
@@ -65,6 +65,16 @@ async function processAnalysisJob(job: Job<AnalysisJob>): Promise<void> {
       }
     }
 
+    // Fetch turn index and all previous turns from DB for context
+    const currentTurn = await prisma.turn.findUnique({ where: { id: turn_id } });
+    const previousTurns = currentTurn ? await prisma.turn.findMany({
+      where: { conversationId: conversation_id, index: { lt: currentTurn.index } },
+      orderBy: { index: 'asc' },
+    }) : [];
+
+    // Find the most recent user turn for pivot detection
+    const lastUserTurn = [...previousTurns].reverse().find((t: any) => t.role === 'USER');
+
     // Call the analysis engine
     const response = await fetch(`${ANALYSIS_ENGINE_URL}/analyze/turn`, {
       method: 'POST',
@@ -74,9 +84,18 @@ async function processAnalysisJob(job: Job<AnalysisJob>): Promise<void> {
         turn: {
           role: 'assistant',
           content: ai_content,
-          turn_index: 0,
+          turn_index: currentTurn?.index ?? 0,
         },
-        previous_turns: [],
+        previous_turns: previousTurns.map((t: any) => ({
+          role: t.role === 'USER' ? 'user' : 'assistant',
+          content: t.content,
+          turn_index: t.index,
+        })),
+        user_turn: lastUserTurn ? {
+          role: 'user',
+          content: lastUserTurn.content,
+          turn_index: lastUserTurn.index,
+        } : null,
         ignored_categories: ignoredCategories,
         custom_rules: customRules,
       }),
@@ -103,6 +122,23 @@ async function processAnalysisJob(job: Job<AnalysisJob>): Promise<void> {
       },
       'Turn analysis complete',
     );
+
+    if (result.flags && result.flags.length > 0) {
+      await prisma.flag.createMany({
+        data: result.flags.map((f, i) => ({
+          id: `flag_${turn_id}_${i}`,
+          turnId: turn_id,
+          conversationId: conversation_id,
+          projectId: project_id ?? '',
+          patternName: f.pattern,
+          description: f.explanation || f.pattern,
+          severity: (f.severity || 'LOW').toUpperCase() as any,
+          confidence: f.confidence || 0,
+          evidence: f.excerpt || '',
+          scoreImpact: 0,
+        }))
+      });
+    }
 
     // Publish real-time event via Redis pub/sub
     if (project_id) {
@@ -157,12 +193,23 @@ async function processScoringJob(job: Job<ScoringJob>): Promise<void> {
       }
     }
 
+    const turns = await prisma.turn.findMany({
+      where: { conversationId: conversation_id },
+      orderBy: { index: 'asc' }
+    });
+
+    const turnsPayload = turns.map(t => ({
+      role: t.role === 'USER' ? 'user' : 'assistant',
+      content: t.content,
+      turn_index: t.index
+    }));
+
     const response = await fetch(`${ANALYSIS_ENGINE_URL}/analyze/conversation`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         conversation_id,
-        turns: [], // Would be populated from stored turns
+        turns: turnsPayload,
         ignored_categories: ignoredCategories,
         custom_rules: customRules,
       }),
@@ -174,10 +221,10 @@ async function processScoringJob(job: Job<ScoringJob>): Promise<void> {
 
     const result = await response.json() as {
       tilt_score: number;
-      grade: string;
-      flagged_turns: unknown[];
-      pattern_summary: Record<string, number>;
-      summary_text: string;
+      tilt_grade: string;
+      flagged_turns: number;
+      pattern_breakdown: Record<string, number>;
+      summary: string;
     };
 
     logger.info(
@@ -189,6 +236,17 @@ async function processScoringJob(job: Job<ScoringJob>): Promise<void> {
       'Conversation scored',
     );
 
+    await prisma.conversation.update({
+      where: { id: conversation_id },
+      data: {
+        status: 'COMPLETED',
+        tiltScore: result.tilt_score,
+        grade: result.tilt_grade,
+        endedAt: new Date(),
+        turnCount: turns.length,
+      }
+    });
+
     // Publish scoring event
     if (project_id) {
       await redisPub.publish(
@@ -197,8 +255,8 @@ async function processScoringJob(job: Job<ScoringJob>): Promise<void> {
           type: 'conversation_scored',
           conversation_id,
           tilt_score: result.tilt_score,
-          grade: result.grade,
-          summary: result.summary_text,
+          grade: result.tilt_grade,
+          summary: result.summary,
           timestamp: new Date().toISOString(),
         }),
       );
@@ -243,4 +301,5 @@ export async function initWorkers(): Promise<void> {
 
   logger.info('Analysis and scoring workers started');
 }
+
 

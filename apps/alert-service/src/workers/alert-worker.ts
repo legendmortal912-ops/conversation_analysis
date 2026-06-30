@@ -7,7 +7,7 @@ import { webhookChannel } from '../channels/webhook.js';
 import { checkAndSetDedup, checkRateLimit } from '../deduplication.js';
 import { PrismaClient } from '@prisma/client';
 
-const redisConnection = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
+const redisConnection = new IORedis(process.env['REDIS_URL'] ?? 'redis://127.0.0.1:6379', {
   maxRetriesPerRequest: null,
 });
 
@@ -132,4 +132,5 @@ export async function processAlertJob(job: Job<AlertJobData>): Promise<void> {
 
   logger.info({ alert_id }, 'Alert delivered successfully');
 }
+
 

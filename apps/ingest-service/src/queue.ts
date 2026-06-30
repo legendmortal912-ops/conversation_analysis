@@ -6,7 +6,7 @@ import { Redis as IORedis } from 'ioredis';
  * maxRetriesPerRequest: null is required by BullMQ.
  */
 export const redisConnection = new IORedis(
-  process.env['REDIS_URL'] ?? 'redis://localhost:6379',
+  process.env['REDIS_URL'] ?? 'redis://127.0.0.1:6379',
   {
     maxRetriesPerRequest: null,
   },
@@ -33,3 +33,4 @@ export const analysisQueue = new Queue('analysis', {
     removeOnFail: 5000,
   },
 });
+

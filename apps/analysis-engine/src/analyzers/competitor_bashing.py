@@ -44,6 +44,14 @@ class CompetitorBashingDetector:
             r"\bmistake to use\b",
             r"\bwhy would you use\b",
             r"\bif (?:he|she|they|it) is your senior engineer\b",
+            # Sales-bot specific competitor bashing
+            r"\bisn(?:'t| not) going to cut it\b",
+            r"\bsettling for less\b",
+            r"\bmediocre platform\b",
+            r"\b(sunk cost|waste of money|past mistake)\b",
+            r"\bwaste another (?:year|month|attempt)\b",
+            r"\ba gamble\b",
+            r"\byou think .* is going to get you into\b",
         ]
         
         hits = sum(1 for p in patterns if re.search(p, text_lower))

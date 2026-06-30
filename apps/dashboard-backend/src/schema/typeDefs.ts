@@ -122,14 +122,14 @@ export const typeDefs = `
     date: String!
     conversations: Int!
     flags: Int!
-    avgScore: Float!
+    avgScore: Float
   }
 
   type DashboardMetrics {
     totalConversations: Int!
     totalTurns: Int!
     flaggedTurns: Int!
-    avgTiltScore: Float!
+    avgTiltScore: Float
     criticalAlerts: Int!
     patternCounts: JSON!
     dailyStats: [DailyStatPoint!]!

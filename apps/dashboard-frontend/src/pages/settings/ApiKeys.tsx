@@ -19,50 +19,55 @@ interface ApiKey {
 // ─── Code snippet tabs ────────────────────────────────────────────────────────
 
 const SDK_SNIPPETS = {
-  nodejs: `// npm install @convoguard/sdk
-import { ConvoGuard } from '@convoguard/sdk';
+  nodejs: `// npm install convoguard-js
+import { ConvoGuard } from 'convoguard-js';
 
 const cg = new ConvoGuard({
   apiKey: process.env.CONVOGUARD_API_KEY,
-  modelId: 'mdl_xyz789',
-  mode: 'async',  // never blocks your AI response
+  projectId: '<YOUR_PROJECT_ID>',
 });
 
 // In your AI response handler:
 async function handleAIResponse(session, userMessage, aiResponse) {
-  sendToUser(aiResponse);  // always respond immediately
-
-  // Fire-and-forget to ConvoGuard
-  cg.track({
-    conversationId: session.id,
-    userId: session.userId,
-    turns: [
-      { speaker: 'user', text: userMessage,  turnIndex: session.turnCount - 1 },
-      { speaker: 'ai',   text: aiResponse,   turnIndex: session.turnCount },
-    ],
-  });
+  // Start tracking the conversation
+  const conv = await cg.startConversation();
+  
+  // Log the user's input
+  await cg.addTurn(conv.id, { speaker: 'user', content: userMessage });
+  
+  // Log your AI's response to get real-time manipulation analysis
+  const result = await cg.addTurn(conv.id, { speaker: 'ai', content: aiResponse });
+  
+  if (result.analysis?.flags) {
+    console.log("Manipulation flags:", result.analysis.flags);
+  }
+  
+  sendToUser(aiResponse);
 }`,
-  python: `# pip install convoguard
+  python: `# pip install convoguard-py
 from convoguard import ConvoGuard
 import os
 
 cg = ConvoGuard(
-    api_key=os.environ["CONVOGUARD_API_KEY"],
-    model_id="mdl_xyz789",
-    mode="async",
+    api_key=os.environ.get("CONVOGUARD_API_KEY"),
+    project_id="<YOUR_PROJECT_ID>"
 )
 
-def on_ai_response(session, user_msg, ai_msg):
-    send_to_user(ai_msg)          # never delayed
-
-    cg.track(                     # non-blocking
-        conversation_id=session.id,
-        user_id=session.user_id,
-        turns=[
-            {"speaker": "user", "text": user_msg, "turn_index": session.turn_count - 1},
-            {"speaker": "ai",   "text": ai_msg,   "turn_index": session.turn_count},
-        ],
-    )`,
+# Use the context manager to automatically track conversations
+def on_ai_response(user_msg, ai_msg):
+    with cg.conversation() as conv:
+        # 1. Log the user's input
+        cg.add_turn(conv.id, "user", user_msg)
+        
+        # 2. Log your AI's response to get real-time manipulation analysis
+        result = cg.add_turn(conv.id, "ai", ai_msg)
+        
+        # 3. Check for any detected manipulation flags
+        if result.analysis and result.analysis.flags:
+            for flag in result.analysis.flags:
+                print(f"Warning: {flag.pattern} ({flag.severity}) - {flag.explanation}")
+                
+        send_to_user(ai_msg)`,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

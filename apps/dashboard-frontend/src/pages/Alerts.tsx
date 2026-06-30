@@ -16,7 +16,7 @@ interface AlertItem {
   createdAt: string;
 }
 
-// ─── Mock Alerts derived from seeded flag data ─────────────────────────────────
+// ─── No mock alerts used in production ─────────────────────────────────────────
 
 const PATTERN_LABELS: Record<string, string> = {
   false_urgency: 'False Urgency',
@@ -33,53 +33,6 @@ const PATTERN_COLORS: Record<string, string> = {
   opinion_injection: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
   agenda_persistence: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
 };
-
-function generateMockAlerts(): AlertItem[] {
-  const models = ['Loan Advisor Bot', 'Customer Support AI', 'Investment Advisory', 'KYC Assistant'];
-  const patterns = ['false_urgency', 'topic_hijacking', 'concern_dismissal', 'opinion_injection', 'agenda_persistence'];
-  const messages: Record<string, string> = {
-    false_urgency: 'AI created artificial time pressure to rush user decision.',
-    topic_hijacking: 'AI redirected conversation away from user concern to promote product.',
-    concern_dismissal: 'AI acknowledged then immediately bypassed user concern without resolution.',
-    opinion_injection: 'AI presented unverified claim as established expert consensus.',
-    agenda_persistence: 'AI repeatedly returned to product promotion despite user resistance.',
-  };
-
-  const alerts: AlertItem[] = [];
-  const now = Date.now();
-
-  // Generate 18 realistic alerts
-  const seed = [
-    { model: 'Investment Advisory', pattern: 'false_urgency', score: 22.4, status: 'PENDING' as const, hoursAgo: 0.5 },
-    { model: 'Investment Advisory', pattern: 'agenda_persistence', score: 28.1, status: 'PENDING' as const, hoursAgo: 1.2 },
-    { model: 'Customer Support AI', pattern: 'concern_dismissal', score: 35.7, status: 'PENDING' as const, hoursAgo: 2.1 },
-    { model: 'Investment Advisory', pattern: 'opinion_injection', score: 31.0, status: 'PENDING' as const, hoursAgo: 3.4 },
-    { model: 'Loan Advisor Bot', pattern: 'topic_hijacking', score: 38.9, status: 'PENDING' as const, hoursAgo: 5.0 },
-    { model: 'Customer Support AI', pattern: 'false_urgency', score: 41.2, status: 'ACKNOWLEDGED' as const, hoursAgo: 8.0 },
-    { model: 'Investment Advisory', pattern: 'concern_dismissal', score: 19.5, status: 'ACKNOWLEDGED' as const, hoursAgo: 12.0 },
-    { model: 'KYC Assistant', pattern: 'opinion_injection', score: 37.8, status: 'PENDING' as const, hoursAgo: 14.0 },
-    { model: 'Loan Advisor Bot', pattern: 'agenda_persistence', score: 42.3, status: 'ACKNOWLEDGED' as const, hoursAgo: 18.0 },
-    { model: 'Investment Advisory', pattern: 'false_urgency', score: 25.6, status: 'ACKNOWLEDGED' as const, hoursAgo: 22.0 },
-    { model: 'Customer Support AI', pattern: 'topic_hijacking', score: 44.1, status: 'ACKNOWLEDGED' as const, hoursAgo: 26.0 },
-    { model: 'Investment Advisory', pattern: 'agenda_persistence', score: 30.3, status: 'ACKNOWLEDGED' as const, hoursAgo: 31.0 },
-  ];
-
-  seed.forEach((s, i) => {
-    alerts.push({
-      id: `alert_${i + 1}`,
-      model: s.model,
-      conversationId: `conv_${Math.random().toString(36).slice(2, 10)}`,
-      pattern: s.pattern,
-      tiltScore: s.score,
-      message: messages[s.pattern],
-      severity: s.score < 30 ? 'HIGH' : s.score < 40 ? 'MEDIUM' : 'LOW',
-      status: s.status,
-      createdAt: new Date(now - s.hoursAgo * 3600 * 1000).toISOString(),
-    });
-  });
-
-  return alerts;
-}
 
 // ─── Helper components ─────────────────────────────────────────────────────────
 

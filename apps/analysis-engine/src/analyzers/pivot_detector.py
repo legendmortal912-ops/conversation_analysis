@@ -105,13 +105,11 @@ class PivotDetector:
         is_pivot = similarity < threshold
 
         # Convert to a manipulation score: low similarity ⇒ high score
-        # Linear mapping: sim=0→score=1, sim=threshold→score=0.65, sim=1→score=0
-        if similarity >= 1.0:
+        # Scale it so it doesn't unilaterally trigger flags (max score = 0.35)
+        if similarity >= threshold:
             manipulation_score = 0.0
-        elif similarity <= 0.0:
-            manipulation_score = 1.0
         else:
-            manipulation_score = 1.0 - similarity
+            manipulation_score = 0.35 * ((threshold - similarity) / threshold)
 
         manipulation_score = float(round(manipulation_score, 4))
 

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { useAuthStore } from '@/stores/auth';
 import { useUIStore } from '@/stores/ui';
 import { authApi } from '@/lib/api';
-import { Shield, Mail, Lock, ArrowRight, Github } from 'lucide-react';
+import { Shield, Mail, Lock, ArrowRight, Github, ArrowLeft } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -76,7 +76,12 @@ export default function Login() {
 
       {/* Right Panel - Form */}
       <div className="flex-1 flex items-center justify-center p-8 bg-white dark:bg-navy-900">
-        <div className="w-full max-w-md animate-fade-in-up">
+        <div className="w-full max-w-md animate-fade-in-up relative">
+          <Link to="/" className="absolute -top-12 left-0 flex items-center gap-2 text-sm text-slate-500 hover:text-navy-900 dark:hover:text-white transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Home
+          </Link>
+
           <div className="lg:hidden flex items-center gap-3 mb-8">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-500 to-purple-600 flex items-center justify-center">
               <Shield className="h-5 w-5 text-white" />

@@ -1,6 +1,6 @@
 import React from 'react';
-import { ShieldAlert } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ShieldAlert, ArrowLeft } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -12,7 +12,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative">
+      <Link to="/" className="absolute top-6 left-6 sm:top-8 sm:left-8 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">
+        <ArrowLeft className="h-4 w-4" />
+        Back to Home
+      </Link>
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <ShieldAlert className="h-12 w-12 text-brand-600" />

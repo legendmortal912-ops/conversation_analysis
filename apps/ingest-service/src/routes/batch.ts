@@ -5,7 +5,7 @@ import { Redis as IORedis } from 'ioredis';
 import { logger } from '../utils/logger.js';
 import { scrubPII } from '../middleware/pii-scrubber.js';
 
-const redisConnection = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
+const redisConnection = new IORedis(process.env['REDIS_URL'] ?? 'redis://127.0.0.1:6379', {
   maxRetriesPerRequest: null,
 });
 
@@ -130,4 +130,5 @@ export async function batchRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 }
+
 

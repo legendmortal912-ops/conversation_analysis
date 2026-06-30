@@ -707,9 +707,9 @@ function CustomRulesTab({ projects }: { projects: any[] }) {
 
 // ─── Tab: Billing ─────────────────────────────────────────────────────────────
 function BillingTab() {
-  const { data, loading } = useQuery(GET_USAGE);
+  const { data, loading } = useQuery(GET_USAGE, { fetchPolicy: 'cache-and-network' });
   const [showUpgrade, setShowUpgrade] = useState(false);
-  if (loading) return <Spinner />;
+  if (loading && !data) return <Spinner />;
 
   const stats = data?.usageStats;
   const planLimits: Record<string, { conversations: number; label: string; color: string }> = {

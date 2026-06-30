@@ -8,7 +8,7 @@ import { logger } from '../utils/logger.js';
  * turn analysis results, conversation scores, and alerts in real-time.
  */
 export async function websocketRoutes(app: FastifyInstance): Promise<void> {
-  const redisSub = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
+  const redisSub = new IORedis(process.env['REDIS_URL'] ?? 'redis://127.0.0.1:6379');
 
   // Track active WebSocket connections per project
   const projectConnections = new Map<string, Set<WebSocket>>();
@@ -76,4 +76,5 @@ export async function websocketRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 }
+
 

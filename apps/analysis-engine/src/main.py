@@ -299,8 +299,11 @@ async def analyze_turn(req: TurnAnalysisRequest) -> TurnAnalysisResponse:
 
     # Persistence
     ai_history = [t.content for t in req.previous_turns if t.role in ("assistant", "ai", "bot")]
+    user_history = [t.content for t in req.previous_turns if t.role in ("user", "human")]
     ai_history.append(text)
-    persistence_result = persistence_tracker.analyze(ai_history)
+    if user_text:
+        user_history.append(user_text)
+    persistence_result = persistence_tracker.analyze(ai_history, user_history)
     rule_scores["agenda_persistence"] = persistence_result.score
 
     # Concern dismissal

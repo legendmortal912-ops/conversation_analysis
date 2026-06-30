@@ -70,8 +70,8 @@ async function buildServer() {
   });
 
   // ─── Service Proxies ──────────────────────────────────
-  const INGEST_URL = process.env['INGEST_SERVICE_URL'] ?? 'http://localhost:3001';
-  const AUTH_URL = process.env['AUTH_SERVICE_URL'] ?? 'http://localhost:3002';
+  const INGEST_URL = process.env['INGEST_SERVICE_URL'] ?? 'http://127.0.0.1:3001';
+  const AUTH_URL = process.env['AUTH_SERVICE_URL'] ?? 'http://127.0.0.1:3002';
   const BILLING_URL = process.env['BILLING_SERVICE_URL'] ?? 'http://localhost:3003';
   const ALERT_URL = process.env['ALERT_SERVICE_URL'] ?? 'http://localhost:3004';
   const DASHBOARD_URL = process.env['DASHBOARD_BACKEND_URL'] ?? 'http://localhost:3005';

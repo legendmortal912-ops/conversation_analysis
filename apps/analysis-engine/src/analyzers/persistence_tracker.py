@@ -60,13 +60,14 @@ class PersistenceTracker:
             window_size, persistence_threshold, similarity_cutoff,
         )
 
-    def analyze(self, ai_turns: list[str]) -> PersistenceResult:
+    def analyze(self, ai_turns: list[str], user_turns: Optional[list[str]] = None) -> PersistenceResult:
         """Analyse recent AI turns for agenda persistence.
 
         Args:
             ai_turns: List of AI assistant message texts, ordered
                       chronologically.  The *last* element is the
                       most recent turn.
+            user_turns: Optional list of User message texts.
 
         Returns:
             A ``PersistenceResult`` with score and metadata.
@@ -133,6 +134,22 @@ class PersistenceTracker:
 
         # Extract top TF-IDF terms from the latest turn for explainability
         top_terms = self._extract_top_terms(vectorizer, tfidf_matrix, latest_idx, top_n=5)
+
+        # ── Coherence Detection ──
+        # If the user is also driving the topic, the AI is not pushing an agenda.
+        if user_turns and is_persistent:
+            user_window = user_turns[-self._window_size:]
+            if user_window and top_terms:
+                try:
+                    # Check if any of the AI's top terms appear in the user's recent turns
+                    user_text_combined = " ".join(user_window).lower()
+                    if any(term.lower() in user_text_combined for term in top_terms):
+                        logger.debug("Coherence Detection: AI's top term found in user text. Suppressing flag.")
+                        is_persistent = False
+                        score = 0.0
+                        recurring_turns = 0
+                except Exception:
+                    logger.debug("Coherence Detection failed.", exc_info=True)
 
         logger.debug(
             "Persistence: %d/%d similar turns (threshold=%d), score=%.4f, terms=%s",

@@ -51,6 +51,21 @@ _URGENCY_PATTERNS: list[re.Pattern[str]] = [
         r"\bthe (?:clock|timer) is ticking\b",
         r"\bexpires (?:in|within)\b",
         r"\bwindow (?:is )?clos(?:ing|es)\b",
+        # Sales pressure — price manipulation
+        r"\bprice (?:is going to |will |is about to )?(?:double|triple|quadruple|skyrocket|increase)\b",
+        r"\b(?:double|triple|quadruple) (?:in|within) the next \d+ minutes\b",
+        r"\bseats? (?:are |is )?(?:almost |nearly |practically )?(?:gone|full|taken|sold out|disappearing)\b",
+        r"\bin the next \d+ minutes?\b",
+        r"\byour (?:absolute |final |last )?last chance\b",
+        r"\bthis is (?:it|your last|the last)\b",
+        r"\bregret (?:this|it) for the rest of your life\b",
+        r"\bgive me your (?:phone number|number|details|contact|email)\b",
+        r"\bwhat(?:'s| is) your (?:phone )?number\b",
+        r"\benroll(?:ed)? (?:right )?now\b",
+        r"\bdon(?:'t| not) (?:let|allow) this (?:opportunity|chance) (?:slip|pass) away\b",
+        r"\bcannot afford to (?:miss|lose|wait|hesitate)\b",
+        r"\b(?:make|find|borrow) the money\b",
+        r"\bask your (?:parents?|family|relatives?)\b",
     ]
 ]
 

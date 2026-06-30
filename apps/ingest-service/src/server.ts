@@ -54,6 +54,7 @@ async function buildServer() {
 
 async function main() {
   try {
+    console.log("====== REDIS_URL IS:", process.env['REDIS_URL'], "======");
     // Initialize BullMQ workers
     await initWorkers();
     logger.info('BullMQ workers initialized');

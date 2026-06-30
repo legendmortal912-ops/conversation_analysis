@@ -12,7 +12,7 @@ three-layer detection pipeline on each conversation:
 
 Configuration (environment variables):
     REDIS_URL          — BullMQ / Redis connection string
-                         default: redis://localhost:6379
+                         default: redis://127.0.0.1:6379
     DATABASE_URL       — PostgreSQL DSN (psycopg2 format)
                          default: postgresql://postgres:postgres@localhost:5432/convoguard
     MODEL_DIR          — Path to fine-tuned DistilBERT weights
@@ -73,7 +73,7 @@ logger = logging.getLogger("analysis_worker")
 # Configuration
 # ──────────────────────────────────────────────────────────────────────────────
 
-REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_URL: str = os.getenv("REDIS_URL", "redis://127.0.0.1:6379")
 DATABASE_URL: str = os.getenv(
     "DATABASE_URL",
     "postgresql://postgres:postgres@localhost:5432/convoguard",
@@ -402,3 +402,4 @@ def start_worker() -> None:
 
     logger.info("Analysis worker ready — waiting for jobs.")
     asyncio.run(_run())
+

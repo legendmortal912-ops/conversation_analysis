@@ -20,7 +20,7 @@ interface ModelCard {
   name: string;
   aiSystemName: string;
   alertThreshold: number;
-  tiltScore: number;
+  tiltScore: number | null;
   totalConversations: number;
   patternRates: PatternRate;
   environment: string;
@@ -80,15 +80,15 @@ const DEMO_MODELS: ModelCard[] = [
 
 function tiltColor(score: number | null | undefined): string {
   if (score == null) return 'text-slate-400';
-  if (score >= 70) return 'text-emerald-400';
-  if (score >= 40) return 'text-amber-400';
+  if (score <= 35) return 'text-emerald-400';
+  if (score <= 60) return 'text-amber-400';
   return 'text-red-400';
 }
 
 function tiltBg(score: number | null | undefined): string {
   if (score == null) return 'border-slate-300 dark:border-slate-700/40';
-  if (score >= 70) return 'border-emerald-500/40 shadow-emerald-500/10';
-  if (score >= 40) return 'border-amber-500/40 shadow-amber-500/10';
+  if (score <= 35) return 'border-emerald-500/40 shadow-emerald-500/10';
+  if (score <= 60) return 'border-amber-500/40 shadow-amber-500/10';
   return 'border-red-500/40 shadow-red-500/10';
 }
 
@@ -130,22 +130,49 @@ function RegisterModelModal({ onClose, onAdd }: RegisterModalProps) {
   const [environment, setEnvironment] = useState('production');
   const [alertThreshold, setAlertThreshold] = useState(60);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !aiSystemName.trim()) return;
-    const newModel: ModelCard = {
-      id: `mdl_${Date.now()}`,
-      name: name.trim(),
-      aiSystemName: aiSystemName.trim(),
-      alertThreshold,
-      tiltScore: 100, // new — no conversations yet
-      totalConversations: 0,
-      patternRates: { false_urgency: 0, topic_hijacking: 0, concern_dismissal: 0, opinion_injection: 0, agenda_persistence: 0 },
-      environment,
-      createdAt: new Date().toISOString(),
-    };
-    onAdd(newModel);
-    onClose();
+    
+    setLoading(true);
+    try {
+      const res = await fetch('/api/v1/models', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model_name: name.trim(),
+          environment: aiSystemName.trim(), // The REST backend maps environment -> aiSystemName in DB
+          alert_threshold: alertThreshold,
+          description: environment
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const newModel: ModelCard = {
+          id: data.model_id,
+          name: data.model_name,
+          aiSystemName: data.environment,
+          alertThreshold: data.alert_threshold,
+          tiltScore: null, // new — no conversations yet
+          totalConversations: 0,
+          patternRates: { false_urgency: 0, topic_hijacking: 0, concern_dismissal: 0, opinion_injection: 0, agenda_persistence: 0 },
+          environment: environment, // preserve original selection
+          createdAt: data.created_at,
+        };
+        onAdd(newModel);
+        onClose();
+      } else {
+        console.error("Failed to register model", await res.text());
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -194,7 +221,7 @@ function RegisterModelModal({ onClose, onAdd }: RegisterModalProps) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
-              Alert Threshold — TiltScore below {alertThreshold} fires alert
+              Alert Threshold — TiltScore above {alertThreshold} fires alert
             </label>
             <div className="flex items-center gap-3">
               <input
@@ -207,11 +234,11 @@ function RegisterModelModal({ onClose, onAdd }: RegisterModalProps) {
           </div>
           <button
             type="submit"
-            disabled={!name.trim() || !aiSystemName.trim()}
+            disabled={!name.trim() || !aiSystemName.trim() || loading}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-semibold transition-all disabled:opacity-50 shadow-lg shadow-indigo-500/20"
           >
-            <Plus className="h-4 w-4" />
-            Register Model
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {loading ? 'Registering...' : 'Register Model'}
           </button>
         </form>
       </div>
@@ -244,6 +271,7 @@ function ModelCardComponent({ model, onClick }: { model: ModelCard; onClick: () 
           <div className="flex items-center gap-2">
             {envBadge(model.environment)}
             <span className="text-[10px] text-slate-500 font-mono">{model.aiSystemName}</span>
+            <span className="text-[10px] text-slate-400 font-mono ml-2 border-l border-slate-600 pl-2" title="Project ID">ID: {model.id}</span>
           </div>
         </div>
         <div className="text-right">
@@ -277,10 +305,10 @@ function ModelCardComponent({ model, onClick }: { model: ModelCard; onClick: () 
             <Activity className="h-3 w-3" />
             {(model.totalConversations ?? 0).toLocaleString()} convos
           </span>
-          {model.tiltScore != null && model.alertThreshold != null && model.tiltScore < model.alertThreshold && (
+          {model.tiltScore != null && model.alertThreshold != null && model.tiltScore > model.alertThreshold && (
             <span className="flex items-center gap-1 text-amber-400">
               <AlertTriangle className="h-3 w-3" />
-              Below threshold ({model.alertThreshold})
+              Above threshold ({model.alertThreshold})
             </span>
           )}
         </div>
@@ -294,7 +322,7 @@ function ModelCardComponent({ model, onClick }: { model: ModelCard; onClick: () 
 
 export default function Models() {
   const navigate = useNavigate();
-  const [models, setModels] = useState<ModelCard[]>(DEMO_MODELS); // start with data immediately
+  const [models, setModels] = useState<ModelCard[] | null>(null);
   const [showRegister, setShowRegister] = useState(false);
   const [liveData, setLiveData] = useState(false);
 
@@ -331,8 +359,17 @@ export default function Models() {
       })
       .catch((err) => {
         console.error('Failed to fetch models:', err);
+        setModels(DEMO_MODELS); // Fallback to demo models on failure
       });
   }, []);
+
+  if (models === null) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
+      </div>
+    );
+  }
 
   const criticalCount = models.filter((m) => (m.tiltScore ?? 0) > 80).length;
   const concerningCount = models.filter((m) => (m.tiltScore ?? 0) >= 40 && (m.tiltScore ?? 0) <= 80).length;

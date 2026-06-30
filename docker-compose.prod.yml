@@ -1,0 +1,96 @@
+version: '3.8'
+
+x-env-mapping: &env-mapping
+  DATABASE_URL: ${DATABASE_URL}
+  DIRECT_URL: ${DIRECT_URL}
+  REDIS_URL: ${REDIS_URL}
+  JWT_SECRET: ${JWT_SECRET}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+  GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+  GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+  NODE_ENV: production
+
+services:
+  # ════════════════════════════════════════════════════════════
+  # Public API Gateway (Exposed to the Internet)
+  # ════════════════════════════════════════════════════════════
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./apps/api-gateway/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      <<: *env-mapping
+      PORT: "3000"
+      INGEST_SERVICE_URL: http://ingest-service:3000
+      AUTH_SERVICE_URL: http://auth-service:3000
+      BILLING_SERVICE_URL: http://billing-service:3000
+      ALERT_SERVICE_URL: http://alert-service:3000
+      DASHBOARD_BACKEND_URL: http://dashboard-backend:3000
+    restart: unless-stopped
+    depends_on:
+      - ingest-service
+      - auth-service
+      - dashboard-backend
+
+  # ════════════════════════════════════════════════════════════
+  # Internal Microservices (Not Exposed Directly)
+  # ════════════════════════════════════════════════════════════
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./apps/auth-service/Dockerfile
+    environment:
+      <<: *env-mapping
+      PORT: "3000"
+    restart: unless-stopped
+
+  ingest-service:
+    build:
+      context: .
+      dockerfile: ./apps/ingest-service/Dockerfile
+    environment:
+      <<: *env-mapping
+      PORT: "3000"
+    restart: unless-stopped
+
+  alert-service:
+    build:
+      context: .
+      dockerfile: ./apps/alert-service/Dockerfile
+    environment:
+      <<: *env-mapping
+      PORT: "3000"
+    restart: unless-stopped
+
+  billing-service:
+    build:
+      context: .
+      dockerfile: ./apps/billing-service/Dockerfile
+    environment:
+      <<: *env-mapping
+      PORT: "3000"
+    restart: unless-stopped
+
+  dashboard-backend:
+    build:
+      context: .
+      dockerfile: ./apps/dashboard-backend/Dockerfile
+    environment:
+      <<: *env-mapping
+      PORT: "3000"
+    restart: unless-stopped
+
+  # ════════════════════════════════════════════════════════════
+  # Python Analysis Engine (Celery Workers + FastAPI)
+  # ════════════════════════════════════════════════════════════
+  analysis-engine:
+    build:
+      context: .
+      dockerfile: ./apps/analysis-engine/Dockerfile
+    environment:
+      <<: *env-mapping
+      PORT: "8000"
+    restart: unless-stopped

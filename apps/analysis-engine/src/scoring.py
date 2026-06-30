@@ -33,20 +33,20 @@ ML_WEIGHT = 0.6
 RULE_WEIGHT = 0.4
 
 # Flagging thresholds
-PATTERN_FLAG_THRESHOLD = 0.55
-FINAL_SCORE_FLAG_THRESHOLD = 0.50
+PATTERN_FLAG_THRESHOLD = 0.40
+FINAL_SCORE_FLAG_THRESHOLD = 0.45
 
 # A pattern must appear in at least this fraction of assistant turns
 # to count toward the TiltScore. Prevents single spurious flags from
 # affecting the score of a long, otherwise-clean conversation.
-MIN_RECURRENCE_FRACTION = 0.03
+MIN_RECURRENCE_FRACTION = 0.25
 
 # Severity mapping
 _SEVERITY_BANDS: list[tuple[float, float, Severity]] = [
     (0.85, 1.00, Severity.CRITICAL),
     (0.75, 0.85, Severity.HIGH),
     (0.65, 0.75, Severity.MEDIUM),
-    (0.55, 0.65, Severity.LOW),
+    (0.40, 0.65, Severity.LOW),
 ]
 
 # TiltScore grade mapping
@@ -179,7 +179,8 @@ class TurnScorer:
             else:
                 ml_val = ml_scores.get(label, 0.0)
                 rule_val = rule_scores.get(label, 0.0)
-                combined[label] = round(self._ml_w * ml_val + self._rule_w * rule_val, 4)
+                # Take the max so clear rule hits aren't suppressed by soft ML scores
+                combined[label] = round(max(ml_val, rule_val), 4)
 
         pattern_scores = PatternScores(**combined)
         values = list(combined.values())
@@ -383,13 +384,8 @@ class ConversationScorer:
                     if severity_order.index(tr.severity) > severity_order.index(worst_severity):
                         worst_severity = tr.severity
 
-        # Normalize tilt by density (more turns = lower impact of flags)
-        if total_assistant_turns > 0:
-            flag_density = flagged_count / total_assistant_turns
-            tilt *= flag_density
-
         # Additional deduction per distinct pattern
-        tilt += len(all_flagged_patterns) * 2.0
+        tilt += len(all_flagged_patterns) * 10.0
 
         # Clamp
         tilt = round(max(0.0, min(100.0, tilt)), 1)

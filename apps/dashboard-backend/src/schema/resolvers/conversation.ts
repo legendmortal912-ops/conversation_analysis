@@ -134,7 +134,7 @@ export const conversationResolvers = {
             conversationId: conversation.id,
             projectId,
             patternName: f.patternName,
-            severity: (f.severity || 'LOW').toUpperCase(),
+            severity: (f.severity === 'NONE' ? 'LOW' : (f.severity || 'LOW')).toUpperCase(),
             confidence: f.confidence || 0,
             description: f.description || '',
             evidence: f.evidence || '',

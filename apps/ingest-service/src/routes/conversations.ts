@@ -5,7 +5,7 @@ import { Redis as IORedis } from 'ioredis';
 import { logger } from '../utils/logger.js';
 import { scrubPII } from '../middleware/pii-scrubber.js';
 
-const redisConnection = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
+const redisConnection = new IORedis(process.env['REDIS_URL'] ?? 'redis://127.0.0.1:6379', {
   maxRetriesPerRequest: null,
 });
 
@@ -102,6 +102,17 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
     const startedAt = body.started_at ? new Date(body.started_at) : new Date();
 
     // Store in PostgreSQL for operational data
+    await prisma.conversation.create({
+      data: {
+        id: conversationId,
+        projectId,
+        orgId: auth.orgId,
+        externalId: body.external_id,
+        status: 'ACTIVE',
+        startedAt: startedAt,
+      }
+    });
+
     await prisma.usageEvent.create({
       data: {
         orgId: auth.orgId,
@@ -149,6 +160,15 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
       timestamp?: string;
     };
 
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { projectId: true }
+    });
+    if (!conv) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Conversation not found' });
+    }
+    const projectId = conv.projectId;
+
     if (!body.speaker || !body.content) {
       return reply.status(400).send({
         error: 'Validation Error',
@@ -169,11 +189,25 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
     // Scrub PII from content before storage
     const { scrubbed, piiDetected } = scrubPII(body.content);
 
+    // Save turn to PostgreSQL
+    const turnCount = await prisma.turn.count({ where: { conversationId } });
+    await prisma.turn.create({
+      data: {
+        id: turnId,
+        conversationId,
+        index: turnCount,
+        role: body.speaker === 'user' ? 'USER' : 'ASSISTANT',
+        content: body.content,
+        contentHash: 'hash',
+        previousHash: 'hash',
+      }
+    });
+
     // Record usage event for billing
     await prisma.usageEvent.create({
       data: {
         orgId: auth.orgId,
-        projectId: auth.projectId ?? '',
+        projectId: projectId,
         eventType: 'TURN_PROCESSED',
         quantity: 1,
         periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -227,35 +261,29 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // ─── POST /v1/conversations/:id/end — End conversation ─
+  // ─── POST /v1/conversations/:id/end — End conversation and score synchronously ─
   app.post('/conversations/:id/end', async (request: FastifyRequest, reply: FastifyReply) => {
     const auth = await validateApiKey(request, reply);
     if (!auth) return;
 
     const { id: conversationId } = request.params as { id: string };
     const body = request.body as { ended_at?: string } | undefined;
-
     const endedAt = body?.ended_at ? new Date(body.ended_at) : new Date();
 
-    // Queue full conversation scoring
-    await scoringQueue.add(
-      'score-conversation',
-      {
-        conversation_id: conversationId,
-        org_id: auth.orgId,
-        project_id: auth.projectId,
-        ended_at: endedAt.toISOString(),
-      },
-      {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 1000 },
-        removeOnComplete: 1000,
-      },
-    );
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { projectId: true }
+    });
+    if (!conv) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Conversation not found' });
+    }
+    const projectId = conv.projectId;
 
-    // Publish end event
+    const ANALYSIS_ENGINE_URL = process.env['ANALYSIS_ENGINE_URL'] ?? 'http://localhost:8001';
+
+    // Publish end event immediately for real-time clients
     await redisConnection.publish(
-      `project:${auth.projectId}:events`,
+      `project:${projectId}:events`,
       JSON.stringify({
         type: 'conversation_ended',
         conversation_id: conversationId,
@@ -264,13 +292,118 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
       }),
     );
 
-    logger.info({ conversationId }, 'Conversation ended, scoring queued');
+    // Run scoring synchronously so we can return tilt_score in the response
+    try {
+      let ignoredCategories: string[] = [];
+      let customRules: any[] = [];
 
-    return {
-      conversation_id: conversationId,
-      status: 'scoring',
-      ended_at: endedAt.toISOString(),
-    };
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        include: { customRules: { where: { isEnabled: true } } },
+      });
+      if (project) {
+        const settings = project.settings as { ignoredCategories?: string[] };
+        if (settings?.ignoredCategories) ignoredCategories = settings.ignoredCategories;
+        customRules = project.customRules.map((r: any) => ({
+          id: r.id, name: r.name, patterns: r.patterns, severity: r.severity.toLowerCase(),
+        }));
+      }
+
+      const turns = await prisma.turn.findMany({
+        where: { conversationId },
+        orderBy: { index: 'asc' },
+      });
+
+      const turnsPayload = turns.map((t: any) => ({
+        role: t.role === 'USER' ? 'user' : 'assistant',
+        content: t.content,
+        turn_index: t.index,
+      }));
+
+      const scoreRes = await fetch(`${ANALYSIS_ENGINE_URL}/analyze/conversation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: conversationId,
+          turns: turnsPayload,
+          ignored_categories: ignoredCategories,
+          custom_rules: customRules,
+        }),
+      });
+
+      if (!scoreRes.ok) {
+        const errText = await scoreRes.text();
+        throw new Error(`Scoring engine returned ${scoreRes.status}: ${errText}`);
+      }
+
+      const scored = await scoreRes.json() as {
+        tilt_score: number;
+        tilt_grade: string;
+        flagged_turns: number;
+        pattern_breakdown: Record<string, number>;
+        summary: string;
+        turn_results?: Array<{ flagged: boolean; flags?: any[] }>;
+      };
+
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: {
+          status: 'COMPLETED',
+          tiltScore: scored.tilt_score,
+          grade: scored.tilt_grade,
+          endedAt,
+          turnCount: turns.length,
+          flagCount: scored.flagged_turns ?? 0,
+        },
+      });
+
+      // Publish scoring event
+      await redisConnection.publish(
+        `project:${auth.projectId}:events`,
+        JSON.stringify({
+          type: 'conversation_scored',
+          conversation_id: conversationId,
+          tilt_score: scored.tilt_score,
+          grade: scored.tilt_grade,
+          summary: scored.summary,
+          timestamp: new Date().toISOString(),
+        }),
+      );
+
+      logger.info({ conversationId, tiltScore: scored.tilt_score, grade: scored.tilt_grade }, 'Conversation scored synchronously');
+
+      return reply.send({
+        conversation_id: conversationId,
+        status: 'completed',
+        tilt_score: scored.tilt_score,
+        grade: scored.tilt_grade,
+        total_turns: turns.length,
+        flagged_turns: scored.flagged_turns ?? 0,
+        summary: scored.summary ?? '',
+        flags: [],
+        ended_at: endedAt.toISOString(),
+      });
+    } catch (err) {
+      logger.error(err, `Synchronous scoring failed for conversation ${conversationId}`);
+      // Fallback: mark as completed without score, queue async
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: { status: 'COMPLETED', endedAt },
+      }).catch(() => {});
+      await scoringQueue.add(
+        'score-conversation',
+        { conversation_id: conversationId, org_id: auth.orgId, project_id: auth.projectId, ended_at: endedAt.toISOString() },
+        { attempts: 3, backoff: { type: 'exponential', delay: 1000 }, removeOnComplete: 1000 },
+      );
+      return reply.send({
+        conversation_id: conversationId,
+        status: 'scoring',
+        tilt_score: null,
+        grade: null,
+        ended_at: endedAt.toISOString(),
+      });
+    }
   });
 }
+
 

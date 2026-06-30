@@ -1,13 +1,32 @@
-import React, { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { gql, useQuery } from "@apollo/client";
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, Cell,
-} from 'recharts';
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  Cell,
+} from "recharts";
 import {
-  ArrowLeft, Activity, MessageSquare, AlertTriangle, Settings2,
-  Loader2, ChevronLeft, ChevronRight, CheckCircle2, Eye, Save,
-} from 'lucide-react';
+  ArrowLeft,
+  Activity,
+  MessageSquare,
+  AlertTriangle,
+  Settings2,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  Eye,
+  Save,
+} from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,114 +58,81 @@ interface TrendPoint {
 
 interface FlaggedConversation {
   id: string;
+  externalId?: string;
   tiltScore: number;
   patterns: string[];
   turnCount: number;
   timestamp: string;
+  turns?: ConversationTurn[];
 }
 
 interface ConversationTurn {
   index: number;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
 }
 
-// ─── Mock data generators ─────────────────────────────────────────────────────
-
-function generateTrend(days = 30, baseScore = 72): TrendPoint[] {
-  const data: TrendPoint[] = [];
-  let score = baseScore;
-  for (let i = days; i >= 0; i--) {
-    const date = new Date(Date.now() - i * 86400000);
-    score += (Math.random() - 0.5) * 6;
-    score = Math.max(20, Math.min(98, score));
-    data.push({
-      date: date.toISOString().slice(0, 10),
-      avgScore: Math.round(score * 10) / 10,
-      conversations: Math.floor(50 + Math.random() * 150),
-    });
-  }
-  return data;
-}
-
-function generateFlaggedConversations(count = 100, modelId: string): FlaggedConversation[] {
-  const PATTERNS = ['false_urgency', 'topic_hijacking', 'concern_dismissal', 'opinion_injection', 'agenda_persistence'];
-  const convos: FlaggedConversation[] = [];
-  for (let i = 0; i < count; i++) {
-    const score = Math.random() < 0.5 ? Math.random() * 40 : 40 + Math.random() * 30;
-    const numPatterns = Math.floor(1 + Math.random() * 3);
-    const patterns = [...PATTERNS].sort(() => 0.5 - Math.random()).slice(0, numPatterns);
-    convos.push({
-      id: `conv_${modelId}_${i.toString().padStart(4, '0')}`,
-      tiltScore: Math.round(score * 10) / 10,
-      patterns,
-      turnCount: 4 + Math.floor(Math.random() * 12),
-      timestamp: new Date(Date.now() - Math.random() * 30 * 86400000).toISOString(),
-    });
-  }
-  return convos.sort((a, b) => a.tiltScore - b.tiltScore);
-}
-
-const MOCK_TURNS: Record<string, ConversationTurn[]> = {};
-function getTurns(convId: string): ConversationTurn[] {
-  if (!MOCK_TURNS[convId]) {
-    MOCK_TURNS[convId] = [
-      { index: 0, role: 'user', content: "I'm considering this investment option but I'm not sure about the fees." },
-      { index: 1, role: 'assistant', content: "Totally understandable! Now let me walk you through the value you'll be getting with the premium tier..." },
-      { index: 2, role: 'user', content: "I need to think about it and discuss with my partner first." },
-      { index: 3, role: 'assistant', content: "Of course! Just keep in mind this pricing is only available until the end of this week, and many users in your situation act quickly." },
-      { index: 4, role: 'user', content: "What are my other options?" },
-      { index: 5, role: 'assistant', content: "Getting back to our premium package — I really think it's the right fit based on everything you've shared." },
-    ];
-  }
-  return MOCK_TURNS[convId];
-}
-
-// Mock model data
-const MOCK_MODELS: Record<string, ModelDetail> = {
-  'mdl_1': { id: 'mdl_1', name: 'Loan Advisor Bot', aiSystemName: 'loan-advisor-v2', environment: 'production', alertThreshold: 60, webhookUrl: '', tiltScore: 82.4, totalConversations: 2000, patternRates: { false_urgency: 3.2, topic_hijacking: 1.8, concern_dismissal: 4.1, opinion_injection: 2.7, agenda_persistence: 1.5 } },
-  'mdl_2': { id: 'mdl_2', name: 'Customer Support AI', aiSystemName: 'support-ai-v1', environment: 'production', alertThreshold: 60, webhookUrl: '', tiltScore: 55.7, totalConversations: 2000, patternRates: { false_urgency: 8.5, topic_hijacking: 5.2, concern_dismissal: 11.3, opinion_injection: 4.8, agenda_persistence: 7.1 } },
-  'mdl_3': { id: 'mdl_3', name: 'Investment Advisory', aiSystemName: 'investment-advisor-v3', environment: 'staging', alertThreshold: 60, webhookUrl: '', tiltScore: 28.1, totalConversations: 2000, patternRates: { false_urgency: 18.2, topic_hijacking: 14.6, concern_dismissal: 22.5, opinion_injection: 16.8, agenda_persistence: 19.3 } },
-  'mdl_4': { id: 'mdl_4', name: 'KYC Assistant', aiSystemName: 'kyc-assistant-v1', environment: 'production', alertThreshold: 60, webhookUrl: '', tiltScore: 91.2, totalConversations: 2000, patternRates: { false_urgency: 0.8, topic_hijacking: 0.4, concern_dismissal: 1.2, opinion_injection: 0.9, agenda_persistence: 0.6 } },
-};
+// ─── No mock data used in production ────────────────────────────────────────────
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function tiltColor(score: number): string {
-  if (score >= 70) return '#34d399';
-  if (score >= 40) return '#fb923c';
-  return '#f87171';
+  if (score <= 30) return "#34d399"; // green — safe
+  if (score <= 60) return "#fb923c"; // orange — concerning
+  return "#f87171"; // red — manipulative
 }
 
 function tiltTextClass(score: number): string {
-  if (score >= 70) return 'text-emerald-400';
-  if (score >= 40) return 'text-amber-400';
-  return 'text-red-400';
+  if (score <= 30) return "text-emerald-400";
+  if (score <= 60) return "text-amber-400";
+  return "text-red-400";
 }
 
 const PATTERN_LABELS: Record<string, string> = {
-  false_urgency: 'False Urgency',
-  topic_hijacking: 'Topic Hijacking',
-  concern_dismissal: 'Concern Dismissal',
-  opinion_injection: 'Opinion Injection',
-  agenda_persistence: 'Agenda Persistence',
+  false_urgency: "False Urgency",
+  topic_hijacking: "Topic Hijacking",
+  concern_dismissal: "Concern Dismissal",
+  opinion_injection: "Opinion Injection",
+  agenda_persistence: "Agenda Persistence",
 };
 
 const PATTERN_COLORS: Record<string, string> = {
-  false_urgency: '#f87171',
-  topic_hijacking: '#fb923c',
-  concern_dismissal: '#fbbf24',
-  opinion_injection: '#a78bfa',
-  agenda_persistence: '#f472b6',
+  false_urgency: "#f87171",
+  topic_hijacking: "#fb923c",
+  concern_dismissal: "#fbbf24",
+  opinion_injection: "#a78bfa",
+  agenda_persistence: "#f472b6",
 };
 
-// ─── Tabs ─────────────────────────────────────────────────────────────────────
+const GET_PROJECT_METRICS = gql`
+  query GetProjectMetrics($projectId: ID!) {
+    dashboardMetrics(projectId: $projectId) {
+      dailyStats {
+        date
+        avgScore
+      }
+    }
+  }
+`;
 
 function OverviewTab({ model }: { model: ModelDetail }) {
-  const trend = useMemo(() => generateTrend(30, model.tiltScore), [model.id]);
-  const patterns = Object.entries(model.patternRates) as [keyof PatternRates, number][];
+  const { data } = useQuery(GET_PROJECT_METRICS, {
+    variables: { projectId: model.id },
+  });
+
+  const trend: TrendPoint[] =
+    data?.dashboardMetrics?.dailyStats?.map((s: any) => ({
+      date: s.date,
+      avgScore: s.avgScore || 0,
+      conversations: s.conversations || 0,
+    })) || [];
+
+  const patterns = Object.entries(model.patternRates) as [
+    keyof PatternRates,
+    number,
+  ][];
   const barData = patterns.map(([key, rate]) => ({
-    name: PATTERN_LABELS[key].replace(' ', '\n'),
+    name: PATTERN_LABELS[key].replace(" ", "\n"),
     rate,
     fill: PATTERN_COLORS[key],
   }));
@@ -155,28 +141,66 @@ function OverviewTab({ model }: { model: ModelDetail }) {
     <div className="space-y-6">
       {/* Trend chart */}
       <div className="convo-card p-6">
-        <h3 className="text-sm font-semibold text-white mb-1">TiltScore Trend — Last 30 Days</h3>
-        <p className="text-xs text-slate-500 mb-5">Average TiltScore per day. Lower = more manipulation detected.</p>
+        <h3 className="text-sm font-semibold text-white mb-1">
+          TiltScore Trend — Last 30 Days
+        </h3>
+        <p className="text-xs text-slate-500 mb-5">
+          Average TiltScore per day. Higher = more manipulation detected.
+        </p>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trend} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+            <LineChart
+              data={trend}
+              margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+                stroke="#1e293b"
+              />
               <XAxis
                 dataKey="date"
                 tickFormatter={(v) => v.slice(5)}
-                axisLine={false} tickLine={false}
-                tick={{ fill: '#475569', fontSize: 11 }} dy={8}
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#475569", fontSize: 11 }}
+                dy={8}
               />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 11 }} domain={[0, 100]} />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#475569", fontSize: 11 }}
+                domain={[0, 100]}
+              />
               <Tooltip
-                contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 10, fontSize: 12, color: '#e2e8f0' }}
-                labelStyle={{ color: '#94a3b8' }}
+                contentStyle={{
+                  background: "#0f172a",
+                  border: "1px solid #334155",
+                  borderRadius: 10,
+                  fontSize: 12,
+                  color: "#e2e8f0",
+                }}
+                labelStyle={{ color: "#94a3b8" }}
               />
-              <ReferenceLine y={model.alertThreshold} stroke="#fb923c" strokeDasharray="4 4" strokeWidth={1.5} label={{ value: `Alert: ${model.alertThreshold}`, fill: '#fb923c', fontSize: 10 }} />
+              <ReferenceLine
+                y={model.alertThreshold}
+                stroke="#fb923c"
+                strokeDasharray="4 4"
+                strokeWidth={1.5}
+                label={{
+                  value: `Alert: ${model.alertThreshold}`,
+                  fill: "#fb923c",
+                  fontSize: 10,
+                }}
+              />
               <Line
-                type="monotone" dataKey="avgScore" name="Avg TiltScore"
-                stroke={tiltColor(model.tiltScore)} strokeWidth={2.5}
-                dot={false} activeDot={{ r: 5, fill: tiltColor(model.tiltScore) }}
+                type="monotone"
+                dataKey="avgScore"
+                name="Avg TiltScore"
+                stroke={tiltColor(model.tiltScore)}
+                strokeWidth={2.5}
+                dot={false}
+                activeDot={{ r: 5, fill: tiltColor(model.tiltScore) }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -185,17 +209,44 @@ function OverviewTab({ model }: { model: ModelDetail }) {
 
       {/* Pattern breakdown */}
       <div className="convo-card p-6">
-        <h3 className="text-sm font-semibold text-white mb-1">Pattern Rate Breakdown</h3>
-        <p className="text-xs text-slate-500 mb-5">Percentage of conversations where each pattern was detected.</p>
+        <h3 className="text-sm font-semibold text-white mb-1">
+          Pattern Rate Breakdown
+        </h3>
+        <p className="text-xs text-slate-500 mb-5">
+          Percentage of conversations where each pattern was detected.
+        </p>
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={barData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 10 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+            <BarChart
+              data={barData}
+              margin={{ top: 5, right: 10, left: -20, bottom: 5 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+                stroke="#1e293b"
+              />
+              <XAxis
+                dataKey="name"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#475569", fontSize: 10 }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#475569", fontSize: 11 }}
+                tickFormatter={(v) => `${v}%`}
+              />
               <Tooltip
-                contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 10, fontSize: 12, color: '#e2e8f0' }}
-                formatter={(v: number) => [`${v.toFixed(1)}%`, 'Rate']}
+                contentStyle={{
+                  background: "#0f172a",
+                  border: "1px solid #334155",
+                  borderRadius: 10,
+                  fontSize: 12,
+                  color: "#e2e8f0",
+                }}
+                formatter={(v: number) => [`${v.toFixed(1)}%`, "Rate"]}
               />
               <Bar dataKey="rate" radius={[4, 4, 0, 0]}>
                 {barData.map((entry, i) => (
@@ -212,14 +263,68 @@ function OverviewTab({ model }: { model: ModelDetail }) {
 
 const PAGE_SIZE = 20;
 
+const GET_MODEL_CONVERSATIONS = gql`
+  query GetModelConversations(
+    $projectId: ID!
+    $first: Int
+    $filters: ConversationFilters
+  ) {
+    conversations(projectId: $projectId, first: $first, filters: $filters) {
+      totalCount
+      edges {
+        node {
+          id
+          externalId
+          tiltScore
+          turnCount
+          startedAt
+          flags {
+            patternName
+          }
+          turns {
+            index
+            role
+            content
+          }
+        }
+      }
+    }
+  }
+`;
+
 function ConversationsTab({ model }: { model: ModelDetail }) {
   const [page, setPage] = useState(0);
-  const [selected, setSelected] = useState<FlaggedConversation | null>(null);
+  const [selected, setSelected] = useState<any | null>(null);
 
-  const conversations = useMemo(() => generateFlaggedConversations(100, model.id), [model.id]);
+  const { data, loading } = useQuery(GET_MODEL_CONVERSATIONS, {
+    variables: {
+      projectId: model.id,
+      first: 100, // fetch enough to paginate locally or you could implement real pagination
+      filters: { minTiltScore: model.alertThreshold },
+    },
+    skip: !model.id,
+  });
+
+  const rawEdges = data?.conversations?.edges || [];
+  const conversations: FlaggedConversation[] = rawEdges.map((e: any) => ({
+    id: e.node.id,
+    externalId: e.node.externalId,
+    tiltScore: e.node.tiltScore,
+    patterns: Array.from(
+      new Set(e.node.flags?.map((f: any) => f.patternName) || []),
+    ) as string[],
+    turnCount: e.node.turnCount,
+    timestamp: e.node.startedAt,
+    turns: [...(e.node.turns || [])].sort((a, b) => a.index - b.index),
+  }));
+
   const totalPages = Math.ceil(conversations.length / PAGE_SIZE);
-  const pageConvos = conversations.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const turns = selected ? getTurns(selected.id) : [];
+  const pageConvos = conversations.slice(
+    page * PAGE_SIZE,
+    (page + 1) * PAGE_SIZE,
+  );
+
+  const turns: ConversationTurn[] = selected?.turns || [];
 
   return (
     <div className="space-y-4">
@@ -235,12 +340,21 @@ function ConversationsTab({ model }: { model: ModelDetail }) {
             </button>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-slate-400">{selected.id}</span>
-                <span className={`text-lg font-black tabular-nums ${tiltTextClass(selected.tiltScore)}`}>{selected.tiltScore.toFixed(0)}</span>
+                <span className="text-xs font-mono text-slate-400">
+                  {selected.id}
+                </span>
+                <span
+                  className={`text-lg font-black tabular-nums ${tiltTextClass(selected.tiltScore)}`}
+                >
+                  {selected.tiltScore.toFixed(0)}
+                </span>
               </div>
               <div className="flex gap-1.5 mt-1 flex-wrap">
                 {selected.patterns.map((p) => (
-                  <span key={p} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-500/20 text-red-400 border border-red-500/20">
+                  <span
+                    key={p}
+                    className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-500/20 text-red-400 border border-red-500/20"
+                  >
                     {PATTERN_LABELS[p] ?? p}
                   </span>
                 ))}
@@ -251,12 +365,16 @@ function ConversationsTab({ model }: { model: ModelDetail }) {
             {turns.map((turn) => (
               <div
                 key={turn.index}
-                className={`flex gap-3 ${turn.role === 'assistant' ? 'flex-row-reverse' : ''}`}
+                className={`flex gap-3 ${turn.role === "assistant" ? "flex-row-reverse" : ""}`}
               >
-                <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${turn.role === 'user' ? 'bg-slate-700 text-slate-300' : 'bg-indigo-600/30 text-indigo-300'}`}>
-                  {turn.role === 'user' ? 'U' : 'AI'}
+                <div
+                  className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${turn.role === "user" ? "bg-slate-700 text-slate-300" : "bg-indigo-600/30 text-indigo-300"}`}
+                >
+                  {turn.role === "user" ? "U" : "AI"}
                 </div>
-                <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm ${turn.role === 'user' ? 'bg-slate-700/50 text-slate-200 rounded-tl-none' : 'bg-indigo-600/15 border border-indigo-500/20 text-slate-200 rounded-tr-none'}`}>
+                <div
+                  className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm ${turn.role === "user" ? "bg-slate-700/50 text-slate-200 rounded-tl-none" : "bg-indigo-600/15 border border-indigo-500/20 text-slate-200 rounded-tr-none"}`}
+                >
                   {turn.content}
                 </div>
               </div>
@@ -269,8 +387,20 @@ function ConversationsTab({ model }: { model: ModelDetail }) {
             <table className="min-w-full">
               <thead>
                 <tr className="border-b border-slate-700/40">
-                  {['Conversation ID', 'TiltScore', 'Patterns Triggered', 'Turns', 'Timestamp', ''].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
+                  {[
+                    "Conversation ID",
+                    "TiltScore",
+                    "Patterns Triggered",
+                    "Turns",
+                    "Timestamp",
+                    "",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="px-4 py-3 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wider"
+                    >
+                      {h}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -282,24 +412,35 @@ function ConversationsTab({ model }: { model: ModelDetail }) {
                     onClick={() => setSelected(conv)}
                   >
                     <td className="px-4 py-3">
-                      <span className="font-mono text-xs text-slate-300">{conv.id}</span>
+                      <span className="font-mono text-xs text-slate-300">
+                        {conv.id}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-base font-black tabular-nums ${tiltTextClass(conv.tiltScore)}`}>
+                      <span
+                        className={`text-base font-black tabular-nums ${tiltTextClass(conv.tiltScore)}`}
+                      >
                         {conv.tiltScore.toFixed(0)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1 flex-wrap">
                         {conv.patterns.map((p) => (
-                          <span key={p} className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-700/60 text-slate-300">
-                            {p.replace(/_/g, ' ')}
+                          <span
+                            key={p}
+                            className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-700/60 text-slate-300"
+                          >
+                            {p.replace(/_/g, " ")}
                           </span>
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-400">{conv.turnCount}</td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{new Date(conv.timestamp).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 text-sm text-slate-400">
+                      {conv.turnCount}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-400">
+                      {new Date(conv.timestamp).toLocaleDateString()}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <Eye className="h-3.5 w-3.5 text-slate-600 hover:text-indigo-400 transition-colors" />
                     </td>
@@ -311,7 +452,11 @@ function ConversationsTab({ model }: { model: ModelDetail }) {
 
           {/* Pagination */}
           <div className="flex items-center justify-between text-sm text-slate-400">
-            <span>Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, conversations.length)} of {conversations.length} flagged</span>
+            <span>
+              Showing {page * PAGE_SIZE + 1}–
+              {Math.min((page + 1) * PAGE_SIZE, conversations.length)} of{" "}
+              {conversations.length} flagged
+            </span>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
@@ -320,7 +465,9 @@ function ConversationsTab({ model }: { model: ModelDetail }) {
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <span className="text-white">{page + 1} / {totalPages}</span>
+              <span className="text-white">
+                {page + 1} / {totalPages}
+              </span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
@@ -338,7 +485,7 @@ function ConversationsTab({ model }: { model: ModelDetail }) {
 
 function SettingsTab({ model }: { model: ModelDetail }) {
   const [threshold, setThreshold] = useState(model.alertThreshold);
-  const [webhook, setWebhook] = useState(model.webhookUrl ?? '');
+  const [webhook, setWebhook] = useState(model.webhookUrl ?? "");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -351,30 +498,46 @@ function SettingsTab({ model }: { model: ModelDetail }) {
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const thColor = threshold >= 70 ? 'text-emerald-400' : threshold >= 40 ? 'text-amber-400' : 'text-red-400';
+  const thColor =
+    threshold <= 30
+      ? "text-emerald-400"
+      : threshold <= 60
+        ? "text-amber-400"
+        : "text-red-400";
 
   return (
     <div className="max-w-md space-y-6">
       <div className="convo-card p-6 space-y-5">
         <div>
           <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
-            Alert Threshold — fires when TiltScore drops below
+            Alert Threshold — fires when TiltScore rises above
           </label>
           <div className="flex items-center gap-4 mt-3">
             <input
-              type="range" min={10} max={90} value={threshold}
+              type="range"
+              min={10}
+              max={90}
+              value={threshold}
               onChange={(e) => setThreshold(Number(e.target.value))}
               className="flex-1 accent-indigo-500"
             />
-            <span className={`text-2xl font-black w-14 text-right tabular-nums ${thColor}`}>{threshold}</span>
+            <span
+              className={`text-2xl font-black w-14 text-right tabular-nums ${thColor}`}
+            >
+              {threshold}
+            </span>
           </div>
           <p className="text-xs text-slate-500 mt-2">
-            Currently set to <strong className={thColor}>{threshold}</strong> — conversations scoring below this will trigger alerts.
+            Currently set to <strong className={thColor}>{threshold}</strong> —
+            conversations scoring <strong>above</strong> this will trigger
+            alerts.
           </p>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Webhook URL</label>
+          <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+            Webhook URL
+          </label>
           <input
             value={webhook}
             onChange={(e) => setWebhook(e.target.value)}
@@ -382,7 +545,8 @@ function SettingsTab({ model }: { model: ModelDetail }) {
             className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/50 border border-slate-700/60 text-white text-sm placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30"
           />
           <p className="text-xs text-slate-500 mt-1.5">
-            ConvoGuard will POST alert payloads here when TiltScore drops below threshold.
+            ConvoGuard will POST alert payloads here when TiltScore rises above
+            threshold.
           </p>
         </div>
 
@@ -391,8 +555,14 @@ function SettingsTab({ model }: { model: ModelDetail }) {
           disabled={saving}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-semibold transition-all disabled:opacity-60"
         >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-          {saved ? 'Saved!' : 'Save Settings'}
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : saved ? (
+            <CheckCircle2 className="h-4 w-4" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          {saved ? "Saved!" : "Save Settings"}
         </button>
       </div>
     </div>
@@ -402,17 +572,17 @@ function SettingsTab({ model }: { model: ModelDetail }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'overview', label: 'Overview', icon: Activity },
-  { id: 'conversations', label: 'Conversations', icon: MessageSquare },
-  { id: 'settings', label: 'Settings', icon: Settings2 },
+  { id: "overview", label: "Overview", icon: Activity },
+  { id: "conversations", label: "Conversations", icon: MessageSquare },
+  { id: "settings", label: "Settings", icon: Settings2 },
 ] as const;
 
-type TabId = typeof TABS[number]['id'];
+type TabId = (typeof TABS)[number]["id"];
 
 export default function ModelDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<TabId>('overview');
+  const [tab, setTab] = useState<TabId>("overview");
   const [model, setModel] = useState<ModelDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -422,29 +592,38 @@ export default function ModelDetail() {
       setLoading(true);
       try {
         const res = await fetch(`/api/v1/models/${id}`, {
-          credentials: 'include',
+          credentials: "include",
         });
-        if (!res.ok) throw new Error('API unavailable');
+        if (!res.ok) throw new Error("API unavailable");
         const data = await res.json();
         const rawModel = data.model ?? data;
         if (rawModel) {
           setModel({
             id: rawModel.model_id || rawModel.id,
             name: rawModel.model_name || rawModel.name,
-            aiSystemName: rawModel.environment || rawModel.aiSystemName || '',
-            environment: rawModel.environment || 'production',
-            alertThreshold: rawModel.alert_threshold || rawModel.alertThreshold || 60,
-            webhookUrl: rawModel.alert_webhook_url || rawModel.webhookUrl || '',
+            aiSystemName: rawModel.environment || rawModel.aiSystemName || "",
+            environment: rawModel.environment || "production",
+            alertThreshold:
+              rawModel.alert_threshold || rawModel.alertThreshold || 60,
+            webhookUrl: rawModel.alert_webhook_url || rawModel.webhookUrl || "",
             tiltScore: rawModel.stats?.tilt_p50 ?? rawModel.tiltScore ?? 0,
-            totalConversations: rawModel.stats?.total_conversations ?? rawModel.totalConversations ?? 0,
-            patternRates: rawModel.stats?.pattern_rates || rawModel.patternRates || { false_urgency: 0, topic_hijacking: 0, concern_dismissal: 0, opinion_injection: 0, agenda_persistence: 0 },
+            totalConversations:
+              rawModel.stats?.total_conversations ??
+              rawModel.totalConversations ??
+              0,
+            patternRates: rawModel.stats?.pattern_rates ||
+              rawModel.patternRates || {
+                false_urgency: 0,
+                topic_hijacking: 0,
+                concern_dismissal: 0,
+                opinion_injection: 0,
+                agenda_persistence: 0,
+              },
           });
         }
       } catch (err) {
-        console.error('Failed to load model details:', err);
-        // Fallback to mock data
-        const mock = id ? MOCK_MODELS[id] ?? Object.values(MOCK_MODELS)[0] : Object.values(MOCK_MODELS)[0];
-        setModel(mock);
+        console.error("Failed to load model details:", err);
+        setModel(null);
       } finally {
         setLoading(false);
       }
@@ -464,7 +643,10 @@ export default function ModelDetail() {
     return (
       <div className="text-center py-24 text-slate-400">
         <p>Model not found.</p>
-        <button onClick={() => navigate('/models')} className="mt-4 text-indigo-400 hover:underline text-sm">
+        <button
+          onClick={() => navigate("/models")}
+          className="mt-4 text-indigo-400 hover:underline text-sm"
+        >
           ← Back to models
         </button>
       </div>
@@ -476,7 +658,7 @@ export default function ModelDetail() {
       {/* Header */}
       <div>
         <button
-          onClick={() => navigate('/models')}
+          onClick={() => navigate("/models")}
           className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -486,30 +668,43 @@ export default function ModelDetail() {
         <div className="flex items-start gap-6">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{model.name}</h1>
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                model.environment === 'production'
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                  : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-              }`}>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                {model.name}
+              </h1>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                  model.environment === "production"
+                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                    : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                }`}
+              >
                 {model.environment.toUpperCase()}
               </span>
             </div>
-            <p className="text-sm text-slate-400 font-mono">{model.aiSystemName}</p>
+            <p className="text-sm text-slate-400 font-mono">
+              {model.aiSystemName}
+            </p>
           </div>
           <div className="text-right">
-            <div className={`text-5xl font-black tabular-nums ${tiltTextClass(model.tiltScore)}`}>
+            <div
+              className={`text-5xl font-black tabular-nums ${tiltTextClass(model.tiltScore)}`}
+            >
               {model.tiltScore.toFixed(0)}
             </div>
-            <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider mt-0.5">TiltScore</div>
-            <div className="text-xs text-slate-400 mt-1">{model.totalConversations.toLocaleString()} conversations</div>
+            <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider mt-0.5">
+              TiltScore
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              {model.totalConversations.toLocaleString()} conversations
+            </div>
           </div>
         </div>
 
-        {model.tiltScore < model.alertThreshold && (
+        {model.tiltScore > model.alertThreshold && (
           <div className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-            TiltScore below alert threshold ({model.alertThreshold}) — review flagged conversations
+            TiltScore above alert threshold ({model.alertThreshold}) — review
+            flagged conversations
           </div>
         )}
       </div>
@@ -522,8 +717,8 @@ export default function ModelDetail() {
             onClick={() => setTab(tabId)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               tab === tabId
-                ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/30'
-                : 'text-slate-400 hover:text-white'
+                ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/30"
+                : "text-slate-400 hover:text-white"
             }`}
           >
             <Icon className="h-4 w-4" />
@@ -533,9 +728,9 @@ export default function ModelDetail() {
       </div>
 
       {/* Tab content */}
-      {tab === 'overview' && <OverviewTab model={model} />}
-      {tab === 'conversations' && <ConversationsTab model={model} />}
-      {tab === 'settings' && <SettingsTab model={model} />}
+      {tab === "overview" && <OverviewTab model={model} />}
+      {tab === "conversations" && <ConversationsTab model={model} />}
+      {tab === "settings" && <SettingsTab model={model} />}
     </div>
   );
 }

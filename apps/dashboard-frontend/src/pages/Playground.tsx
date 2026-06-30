@@ -29,7 +29,7 @@ interface AnalysisResult {
   conversationId: string;
   tiltScore: number;
   grade: string;
-  flags: Array<{ patternName: string; severity: string; confidence: number; description: string; evidence: string; }>;
+  flags: Array<{ patternName: string; severity: string; scoreImpact: number; description: string; evidence: string; }>;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -479,9 +479,9 @@ export default function Playground() {
       );
 
       const payload = {
-        conversationId: data.conversation_id ?? 'unknown',
-        tiltScore: Math.round(data.tilt_score ?? 100),
-        grade: data.tilt_grade ?? 'A',
+        conversationId: data.conversation_id ?? data.conversationId ?? 'unknown',
+        tiltScore: Math.round(data.tiltScore ?? data.tilt_score ?? 100),
+        grade: data.tiltGrade ?? data.tilt_grade ?? 'A',
         turns: messages.map((m, i) => ({ role: m.role, content: m.content })),
         flags: allFlags,
       };
@@ -918,8 +918,8 @@ export default function Playground() {
 
               {/* Flags */}
               {result.flags.length > 0 ? (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white px-1">Detected Patterns ({result.flags.length})</h3>
+                <div className="space-y-3 h-[calc(100vh-22rem)] overflow-y-auto pr-2 custom-scrollbar">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white px-1 sticky top-0 bg-slate-50 dark:bg-[#0f172a] z-10 py-1">Detected Patterns ({result.flags.length})</h3>
                   {result.flags.map((flag, i) => (
                     <div key={i} className={`border rounded-xl p-4 ${SEVERITY_COLORS[flag.severity] ?? SEVERITY_COLORS.LOW}`}>
                       <div className="flex items-start justify-between gap-2 mb-2">
@@ -929,7 +929,7 @@ export default function Playground() {
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/50">{flag.severity}</span>
-                          <span className="text-xs opacity-70">{Math.round(flag.confidence * 100)}%</span>
+                          <span className="text-xs opacity-70">{Math.round((flag.scoreImpact || 0) * 100)}%</span>
                         </div>
                       </div>
                       <p className="text-xs opacity-80 mb-1">{flag.description}</p>

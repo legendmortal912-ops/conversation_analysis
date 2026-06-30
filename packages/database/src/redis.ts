@@ -21,7 +21,7 @@ const globalForRedis = globalThis as unknown as {
  * Creates a Redis client from environment variables.
  *
  * Environment variables:
- * - `REDIS_URL` — full Redis connection URL (e.g. "redis://localhost:6379")
+ * - `REDIS_URL` — full Redis connection URL (e.g. "redis://127.0.0.1:6379")
  * - `REDIS_HOST` — Redis host (default: "localhost")
  * - `REDIS_PORT` — Redis port (default: 6379)
  * - `REDIS_PASSWORD` — Redis password (optional)
@@ -42,7 +42,7 @@ function createRedisClient(): Redis {
   }
 
   return new Redis({
-    host: process.env['REDIS_HOST'] ?? 'localhost',
+    host: process.env['REDIS_HOST'] ?? '127.0.0.1',
     port: parseInt(process.env['REDIS_PORT'] ?? '6379', 10),
     password: process.env['REDIS_PASSWORD'] ?? undefined,
     db: parseInt(process.env['REDIS_DB'] ?? '0', 10),
@@ -104,7 +104,7 @@ function getBullMQConnection(): ConnectionOptions {
   }
 
   return {
-    host: process.env['REDIS_HOST'] ?? 'localhost',
+    host: process.env['REDIS_HOST'] ?? '127.0.0.1',
     port: parseInt(process.env['REDIS_PORT'] ?? '6379', 10),
     password: process.env['REDIS_PASSWORD'] ?? undefined,
     db: parseInt(process.env['REDIS_DB'] ?? '0', 10),
@@ -203,3 +203,4 @@ export function createWorker<TData = unknown, TResult = unknown>(
     ...opts,
   });
 }
+

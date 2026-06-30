@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger.js';
 import { Redis as IORedis } from 'ioredis';
 
-const redis = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
+const redis = new IORedis(process.env['REDIS_URL'] ?? 'redis://127.0.0.1:6379');
 
 /**
  * Detects if the rate of flagged turns in a project spikes above 30% in a 1-hour window.
@@ -42,4 +42,5 @@ export async function checkFlagSpikeTrigger(
 
   return { triggered: false, message: '' };
 }
+
 

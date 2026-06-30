@@ -1,6 +1,6 @@
 import { Redis as IORedis } from 'ioredis';
 
-const redis = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
+const redis = new IORedis(process.env['REDIS_URL'] ?? 'redis://127.0.0.1:6379');
 
 /**
  * Checks if an alert should be sent based on deduplication rules.
@@ -48,4 +48,5 @@ export async function checkRateLimit(projectId: string, maxAlerts: number = 10):
   
   return current <= maxAlerts;
 }
+
 

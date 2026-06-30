@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger.js';
 import { Redis as IORedis } from 'ioredis';
 
-const redis = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
+const redis = new IORedis(process.env['REDIS_URL'] ?? 'redis://127.0.0.1:6379');
 
 /**
  * Detects if a specific manipulation pattern doubles in frequency compared to the previous hour.
@@ -35,4 +35,5 @@ export async function checkPatternSurgeTrigger(
 
   return { triggered: false, message: '' };
 }
+
 

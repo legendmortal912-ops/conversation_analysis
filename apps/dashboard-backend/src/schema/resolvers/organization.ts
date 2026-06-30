@@ -57,7 +57,7 @@ export const organizationResolvers = {
         where: { projectId, tiltScore: { not: null } },
         _avg: { tiltScore: true },
       });
-      const avgTiltScore = avgResult._avg.tiltScore ?? 100;
+      const avgTiltScore = avgResult._avg.tiltScore ?? null;
 
       // Pattern counts
       const patternCounts: Record<string, number> = {};
@@ -93,7 +93,7 @@ export const organizationResolvers = {
         date,
         conversations: v.conversations,
         flags: v.flags,
-        avgScore: v.scores.length > 0 ? v.scores.reduce((a, b) => a + b, 0) / v.scores.length : 100,
+        avgScore: v.scores.length > 0 ? v.scores.reduce((a, b) => a + b, 0) / v.scores.length : null,
       }));
 
       return {
