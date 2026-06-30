@@ -88,8 +88,8 @@ services:
   # ════════════════════════════════════════════════════════════
   analysis-engine:
     build:
-      context: .
-      dockerfile: ./apps/analysis-engine/Dockerfile
+      context: ./apps/analysis-engine
+      dockerfile: Dockerfile
     environment:
       <<: *env-mapping
       PORT: "8000"
