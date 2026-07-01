@@ -26,7 +26,7 @@ export default function OAuthCallback() {
     async function finishLogin() {
       try {
         // The access_token httpOnly cookie is sent automatically by the browser.
-        const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api/v1` : '/api/v1';
+        const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
         const res = await fetch(`${API_BASE}/auth/me`, {
           credentials: 'include',
         });

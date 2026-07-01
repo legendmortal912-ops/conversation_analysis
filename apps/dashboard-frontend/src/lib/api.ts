@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api/v1` : '/api/v1';
+// In production, VITE_API_URL points directly to the API Gateway (which has no /api/v1 prefix).
+// Locally, it uses /api/v1 so the Vite proxy can catch it and rewrite it.
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
 interface RequestOptions {
   method?: string;
