@@ -15,7 +15,7 @@ export default function Login() {
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
   const addToast = useUIStore((s) => s.addToast);
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
