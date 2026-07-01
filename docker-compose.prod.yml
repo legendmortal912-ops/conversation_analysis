@@ -31,6 +31,7 @@ services:
       BILLING_SERVICE_URL: http://billing-service:3000
       ALERT_SERVICE_URL: http://alert-service:3000
       DASHBOARD_BACKEND_URL: http://dashboard-backend:3000
+      ANALYSIS_ENGINE_URL: http://analysis-engine:8001
     restart: unless-stopped
     depends_on:
       - ingest-service
