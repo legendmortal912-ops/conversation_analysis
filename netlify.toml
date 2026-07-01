@@ -6,22 +6,21 @@
   command = "turbo run build --filter=@convoguard/dashboard-frontend"
 
 # 1. Route API Gateway traffic to production gateway URL
-# Replace "https://api.yourdomain.com" with your live API Gateway domain after deploying the backend.
 [[redirects]]
   from = "/api/v1/*"
-  to = "https://api.yourdomain.com/:splat"
+  to = "http://54.82.212.132.nip.io:3000/:splat"
   status = 200
   force = true
 
 [[redirects]]
   from = "/graphql"
-  to = "https://api.yourdomain.com/graphql"
+  to = "http://54.82.212.132.nip.io:3000/graphql"
   status = 200
   force = true
 
 [[redirects]]
   from = "/ingest/*"
-  to = "https://api.yourdomain.com/ingest/:splat"
+  to = "http://54.82.212.132.nip.io:3000/ingest/:splat"
   status = 200
   force = true
 
