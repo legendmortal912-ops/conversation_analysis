@@ -57,6 +57,7 @@ services:
     environment:
       <<: *env-mapping
       PORT: "3000"
+      ANALYSIS_ENGINE_URL: http://analysis-engine:8001
     restart: unless-stopped
 
   alert-service:
