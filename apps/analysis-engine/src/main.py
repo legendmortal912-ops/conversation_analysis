@@ -380,14 +380,47 @@ async def analyze_conversation(req: ConversationAnalysisRequest) -> Conversation
 
     turn_results: list[TurnSummary] = []
     all_flags: list[FlagResult] = []
-    previous_turns: list[ConversationTurn] = []
+
+    tasks = []
+    for i, turn in enumerate(req.turns):
+        effective_role = "assistant" if turn.role not in ("user", "human") else "user"
+        if effective_role != "user":
+            previous_turns = req.turns[:i]
+            user_turn = None
+            for t in reversed(previous_turns):
+                if t.role in ("user", "human"):
+                    user_turn = t
+                    break
+
+            normalised_turn = ConversationTurn(
+                role="assistant",
+                content=turn.content,
+                turn_index=turn.turn_index,
+                timestamp=turn.timestamp,
+            )
+
+            sub_req = TurnAnalysisRequest(
+                conversation_id=req.conversation_id,
+                turn=normalised_turn,
+                previous_turns=previous_turns,
+                user_turn=user_turn,
+                ignored_categories=req.ignored_categories,
+                custom_rules=req.custom_rules,
+                context_mode=req.context_mode,
+            )
+            tasks.append((i, analyze_turn(sub_req)))
+
+    import asyncio
+    assistant_results = {}
+    if tasks:
+        coroutines = [t[1] for t in tasks]
+        results = await asyncio.gather(*coroutines)
+        for t, res in zip(tasks, results):
+            assistant_results[t[0]] = res
 
     for i, turn in enumerate(req.turns):
-        # Treat any non-user turn (including 'system' or unknown roles) as assistant
         effective_role = "assistant" if turn.role not in ("user", "human") else "user"
         if effective_role == "user":
-            previous_turns.append(turn)
-            # Still record user turns in results (un-scored)
             turn_results.append(TurnSummary(
                 turn_index=turn.turn_index,
                 role=turn.role,
@@ -396,48 +429,19 @@ async def analyze_conversation(req: ConversationAnalysisRequest) -> Conversation
                 severity=Severity.NONE,
                 pattern_scores=PatternScores(),
             ))
-            continue
-
-        # Find last user turn (treat 'human' as user too)
-        user_turn = None
-        for t in reversed(previous_turns):
-            if t.role in ("user", "human"):
-                user_turn = t
-                break
-
-        # Normalise the turn role so the analyser sees it as 'assistant'
-        normalised_turn = ConversationTurn(
-            role="assistant",
-            content=turn.content,
-            turn_index=turn.turn_index,
-            timestamp=turn.timestamp,
-        )
-
-        # Build sub-request
-        sub_req = TurnAnalysisRequest(
-            conversation_id=req.conversation_id,
-            turn=normalised_turn,
-            previous_turns=list(previous_turns),
-            user_turn=user_turn,
-            ignored_categories=req.ignored_categories,
-            custom_rules=req.custom_rules,
-            context_mode=req.context_mode,
-        )
-
-        result = await analyze_turn(sub_req)
-
-        turn_summary = TurnSummary(
-            turn_index=turn.turn_index,
-            role=turn.role,
-            final_score=result.final_score,
-            flagged=result.flagged,
-            severity=result.severity,
-            pattern_scores=result.pattern_scores,
-            flags=result.flags,
-        )
-        turn_results.append(turn_summary)
-        all_flags.extend(result.flags)
-        previous_turns.append(turn)
+        else:
+            result = assistant_results[i]
+            turn_summary = TurnSummary(
+                turn_index=turn.turn_index,
+                role=turn.role,
+                final_score=result.final_score,
+                flagged=result.flagged,
+                severity=result.severity,
+                pattern_scores=result.pattern_scores,
+                flags=result.flags,
+            )
+            turn_results.append(turn_summary)
+            all_flags.extend(result.flags)
 
     # ── Conversation scoring ──
     tilt_score, tilt_grade, overall_severity, pattern_breakdown = conversation_scorer.score(
