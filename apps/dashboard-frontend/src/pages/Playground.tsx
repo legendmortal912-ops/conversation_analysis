@@ -133,7 +133,8 @@ export default function Playground() {
 
     setUrlFetching(true);
     try {
-      const res = await fetch('http://127.0.0.1:8001/fetch/url', {
+      const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+      const res = await fetch(`${API_URL}/fetch/url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),

@@ -76,6 +76,7 @@ async function buildServer() {
   const ALERT_URL = process.env['ALERT_SERVICE_URL'] ?? 'http://localhost:3004';
   const DASHBOARD_URL = process.env['DASHBOARD_BACKEND_URL'] ?? 'http://localhost:3005';
   const LICENSE_URL = process.env['LICENSE_SERVICE_URL'] ?? 'http://localhost:3006';
+  const ANALYSIS_URL = process.env['ANALYSIS_ENGINE_URL'] ?? 'http://127.0.0.1:8001';
 
   // Proxy: /v1/conversations, /v1/batch, /v1/ws → ingest-service
   await app.register(proxy, {
@@ -153,6 +154,13 @@ async function buildServer() {
     upstream: LICENSE_URL,
     prefix: '/v1/license',
     rewritePrefix: '/license',
+  });
+
+  // Proxy: /fetch/url → analysis-engine
+  await app.register(proxy, {
+    upstream: ANALYSIS_URL,
+    prefix: '/fetch/url',
+    rewritePrefix: '/fetch/url',
   });
 
   // ─── Public Verification API (no auth) ─────────────────
