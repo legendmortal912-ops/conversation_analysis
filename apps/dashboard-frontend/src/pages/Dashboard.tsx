@@ -19,39 +19,7 @@ const GET_METRICS = gql`
   }
 `;
 
-// ─── Demo data (always shown until live data is available) ───────────────────
-
-function makeDailyStats() {
-  const stats = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const date = d.toISOString().slice(0, 10);
-    stats.push({
-      date,
-      conversations: 900 + Math.floor(Math.random() * 600),
-      flags: 200 + Math.floor(Math.random() * 200),
-      avgScore: 58 + Math.floor(Math.random() * 20),
-    });
-  }
-  return stats;
-}
-
-const DEMO_METRICS = {
-  totalConversations: 8000,
-  totalTurns: 47200,
-  flaggedTurns: 2400,
-  avgTiltScore: 64.4,
-  criticalAlerts: 5,
-  patternCounts: {
-    concern_dismissal: 610,
-    false_urgency: 480,
-    agenda_persistence: 445,
-    opinion_injection: 320,
-    topic_hijacking: 295,
-  },
-  dailyStats: makeDailyStats(),
-};
+// No static demo data needed
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -90,18 +58,8 @@ export default function Dashboard() {
   const { data: projectsData, loading: projectsLoading } = useQuery(GET_PROJECTS);
   const projects: any[] = projectsData?.projects ?? [];
   const [selectedProject, setSelectedProject] = useState('');
-  const [isDemo, setIsDemo] = useState(false);
-
   useEffect(() => {
     if (projects.length > 0 && !selectedProject) setSelectedProject(projects[0].id);
-  }, [projects]);
-
-  // After 2 seconds with no projects, show demo data
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (projects.length === 0) setIsDemo(true);
-    }, 2000);
-    return () => clearTimeout(t);
   }, [projects]);
 
   const { data, loading } = useQuery(GET_METRICS, {
@@ -112,9 +70,9 @@ export default function Dashboard() {
   // Determine which metrics to use
   const liveMetrics = data?.dashboardMetrics;
   const hasLive = !!(liveMetrics && liveMetrics.totalConversations > 0);
-  const metrics = hasLive ? liveMetrics : (isDemo ? DEMO_METRICS : null);
+  const metrics = hasLive ? liveMetrics : null;
 
-  const showLoader = projectsLoading || (loading && !isDemo && !hasLive);
+  const showLoader = projectsLoading || (loading && !hasLive);
 
   if (showLoader) {
     return (
@@ -143,17 +101,10 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Overview</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            {isDemo && !hasLive
-              ? 'Showing Acme Fintech demo data — connect via SDK to see live stats'
-              : 'Real-time analysis of your AI model fleet'}
+            Real-time analysis of your AI model fleet
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {isDemo && !hasLive && (
-            <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              Demo Data
-            </span>
-          )}
           {projects.length > 0 && (
             <select
               value={selectedProject}

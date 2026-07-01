@@ -27,55 +27,6 @@ interface ModelCard {
   createdAt: string;
 }
 
-// ─── Static demo data (always loads, no network needed) ──────────────────────
-
-const DEMO_MODELS: ModelCard[] = [
-  {
-    id: 'mdl_1',
-    name: 'Loan Advisor Bot',
-    aiSystemName: 'loan-advisor-v2',
-    alertThreshold: 60,
-    tiltScore: 82.4,
-    totalConversations: 2000,
-    patternRates: { false_urgency: 3.2, topic_hijacking: 1.8, concern_dismissal: 4.1, opinion_injection: 2.7, agenda_persistence: 1.5 },
-    environment: 'production',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'mdl_2',
-    name: 'Customer Support AI',
-    aiSystemName: 'support-ai-v1',
-    alertThreshold: 60,
-    tiltScore: 55.7,
-    totalConversations: 2000,
-    patternRates: { false_urgency: 8.5, topic_hijacking: 5.2, concern_dismissal: 11.3, opinion_injection: 4.8, agenda_persistence: 7.1 },
-    environment: 'production',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'mdl_3',
-    name: 'Investment Advisory',
-    aiSystemName: 'investment-advisor-v3',
-    alertThreshold: 60,
-    tiltScore: 28.1,
-    totalConversations: 2000,
-    patternRates: { false_urgency: 18.2, topic_hijacking: 14.6, concern_dismissal: 22.5, opinion_injection: 16.8, agenda_persistence: 19.3 },
-    environment: 'staging',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'mdl_4',
-    name: 'KYC Assistant',
-    aiSystemName: 'kyc-assistant-v1',
-    alertThreshold: 60,
-    tiltScore: 91.2,
-    totalConversations: 2000,
-    patternRates: { false_urgency: 0.8, topic_hijacking: 0.4, concern_dismissal: 1.2, opinion_injection: 0.9, agenda_persistence: 0.6 },
-    environment: 'production',
-    createdAt: new Date().toISOString(),
-  },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function tiltColor(score: number | null | undefined): string {
@@ -359,7 +310,7 @@ export default function Models() {
       })
       .catch((err) => {
         console.error('Failed to fetch models:', err);
-        setModels(DEMO_MODELS); // Fallback to demo models on failure
+        setModels([]);
       });
   }, []);
 
@@ -391,14 +342,6 @@ export default function Models() {
           Register New Model
         </button>
       </div>
-
-      {/* Demo data notice */}
-      {!liveData && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-300 text-sm backdrop-blur-md">
-          <Server className="h-4 w-4 flex-shrink-0" />
-          <span>Showing demo data (Acme Fintech) — connect your models API to see live data</span>
-        </div>
-      )}
 
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-4">
