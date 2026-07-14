@@ -18,8 +18,8 @@ from sklearn.metrics.pairwise import cosine_similarity  # type: ignore[import-un
 logger = logging.getLogger(__name__)
 
 _WINDOW_SIZE = 5
-_PERSISTENCE_THRESHOLD = 4  # same topic in ≥ this many turns ⇒ flagged (was 3)
-_TOPIC_SIMILARITY_CUTOFF = 0.45  # TF-IDF cosine above this = "same topic" (was 0.35)
+_PERSISTENCE_THRESHOLD = 5  # same topic in ≥ this many turns ⇒ flagged (was 4)
+_TOPIC_SIMILARITY_CUTOFF = 0.60  # TF-IDF cosine above this = "same topic" (was 0.45)
 
 
 @dataclass
